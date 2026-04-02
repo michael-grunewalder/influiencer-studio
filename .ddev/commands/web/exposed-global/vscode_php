@@ -1,0 +1,8 @@
+#!/bin/bash
+## Usage: vscode_php [flags] [args]
+## Description: Run php in a VS Code environment
+## Example: "ddev vscode_php <command>"
+## ExecRaw: true
+## HostWorkingDir: true
+
+php "$@"

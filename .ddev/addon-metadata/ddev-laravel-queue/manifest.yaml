@@ -1,0 +1,8 @@
+name: ddev-laravel-queue
+repository: tyler36/ddev-laravel-queue
+version: 1.0.1
+install_date: "2026-03-05T16:42:29+01:00"
+project_files:
+    - config.laravel-workers.yaml
+global_files: []
+removal_actions: []

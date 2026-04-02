@@ -1,0 +1,8 @@
+#!/bin/bash
+## Usage: vscode_npm [flags] [args]
+## Description: Run npm in a VS Code environment
+## Example: "ddev vscode_npm <command>"
+## ExecRaw: true
+## HostWorkingDir: true
+
+npm "$@"

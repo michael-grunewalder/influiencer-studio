@@ -1,0 +1,8 @@
+#!/bin/bash
+## Usage: vscode_composer [flags] [args]
+## Description: Run composer in a VS Code environment
+## Example: "ddev vscode_composer <command>"
+## ExecRaw: true
+## HostWorkingDir: true
+
+composer "$@"

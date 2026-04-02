@@ -1,0 +1,8 @@
+#!/bin/bash
+## Usage: vscode_artisan [flags] [args]
+## Description: Run artisan in a VS Code environment
+## Example: "ddev vscode_artisan <command>"
+## ExecRaw: true
+## HostWorkingDir: true
+
+artisan "$@"

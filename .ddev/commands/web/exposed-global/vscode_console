@@ -1,0 +1,8 @@
+#!/bin/bash
+## Usage: vscode_console [flags] [args]
+## Description: Run console in a VS Code environment
+## Example: "ddev vscode_console <command>"
+## ExecRaw: true
+## HostWorkingDir: true
+
+console "$@"
