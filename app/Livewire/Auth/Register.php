@@ -68,11 +68,20 @@ class Register extends Component
             return;
         }
 
+        //bearny get his axe out of th ebackpack and chops the name mercilessly into small pieces
+        $cNames = collect(explode(" ", $this->name));
+        $firstName = $cNames->shift();
+        $lastName = $cNames->pop();
+        $middleName = $cNames->implode(" ");
+
+
         // User final anlegen
         $user = User::create([
-            'name' => $this->name,
-            'email' => $this->email,
-            'password' => Hash::make($this->password),
+            'first_name'        => $firstName,
+            'middle_name'       => $middleName,
+            'last_name'         => $lastName,
+            'email'             => $this->email,
+            'password'          => Hash::make($this->password),
             'email_verified_at' => now(), // Direkt als verifiziert markieren
         ]);
 
