@@ -22,5 +22,8 @@
 </div>
 
 <x-toast />
+<form action="{{route('logout')}}" method="post" id="frmLogout">
+    @csrf
+</form>
 </body>
 </html>

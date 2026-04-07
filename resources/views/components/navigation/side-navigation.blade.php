@@ -12,16 +12,15 @@
 
         <nav class="flex flex-col bg-base-100/90">
             {{-- Hier kannst du deine Items definieren --}}
-            <x-navigation.side-nav-item label="Startseite" icon="o-home" link="/" :active="Request::is('/')" />
-            <x-navigation.side-nav-item label="Adressverwaltung" icon="o-users" link="/addresses" :active="Request::is('addresses*')" />
-            <x-navigation.side-nav-item label="Kontaktanfragen" icon="o-envelope" />
-            <x-navigation.side-nav-item label="Katalogverwaltung" icon="o-book-open" />
-            <x-navigation.side-nav-item label="PIN-Verwaltung" icon="o-key" />
+            <x-navigation.side-nav-item label="Startseite" icon="house-line" link="/" :active="Request::is('/')" />
 
-            <div class="p-4 pt-8 text-[10px] uppercase tracking-widest text-gray-600 font-bold border-b border-bearny-codes-border">System</div>
-
-            <x-navigation.side-nav-item label="Admin-Bereich" icon="o-shield-check" />
-            <x-navigation.side-nav-item label="Ausloggen" icon="o-power" />
+            <!-----------LOGOUT BUTTON------------------->
+            <a href="#" class='bearny-codes-menu-item group text-gray-400' onclick="event.preventDefault(); document.getElementById('frmLogout').submit();">
+                <div class="flex items-center gap-3">
+                    <x-phosphor-sign-out class="w-4 h-4 group-hover:text-accent" />
+                    <span class="text-sm transition-transform duration-200 group-hover:translate-x-1">Logout</span>
+                </div>
+            </a>
         </nav>
     </div>
 

@@ -1,11 +1,17 @@
 @props(['label', 'icon' => null, 'link' => '#', 'active' => false])
-
-<a href="{{ $link }}"
-   {{ $attributes->merge(['class' => 'bearny-codes-menu-item group ' . ($active ? 'bearny-codes-menu-item-active text-white' : 'text-gray-400')]) }}
-   wire:navigate>
+<?php
+if ($active) {
+    $text_color = 'bearny-codes-menu-item-active text-white'
+}
+else
+{
+    $text_color = 'text-gray-400';
+}
+?>
+<a href="{{ $link }}" class="hover:text-primary bearny-codes-menu-item group {{ $text_color }}" wire:navigate>
     <div class="flex items-center gap-3">
         @if($icon)
-            <x-icon name="{{ $icon }}" class="w-4 h-4 {{ $active ? 'text-primary' : 'group-hover:text-accent' }}" />
+            @svg("phosphor-$icon", 'w-4 h-4 hover:text-primary')
         @endif
         <span class="text-sm transition-transform duration-200 group-hover:translate-x-1">{{ $label }}</span>
     </div>
