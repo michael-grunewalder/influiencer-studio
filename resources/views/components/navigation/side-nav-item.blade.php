@@ -1,7 +1,7 @@
 @props(['label', 'icon' => null, 'link' => '#', 'active' => false])
 <?php
 if ($active) {
-    $text_color = 'bearny-codes-menu-item-active text-white'
+    $text_color = 'bearny-codes-menu-item-active text-white';
 }
 else
 {

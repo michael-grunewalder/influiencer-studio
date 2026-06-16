@@ -4,15 +4,14 @@ namespace App\Livewire;
 
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
+use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Masmerise\Toaster\Toaster;
 
 class Profile extends Component
 {
     public string $current_password = '';
-
     public string $password = '';
-
     public string $password_confirmation = '';
 
     public function updatePassword()
@@ -31,6 +30,7 @@ class Profile extends Component
         Toaster::success(__('Passwort erfolgreich aktualisiert.'));
     }
 
+    #[Layout('components.layouts.app')]
     public function render()
     {
         return view('livewire.profile', [
