@@ -23,7 +23,7 @@
     </x-nav>
 
     {{-- MAIN --}}
-    <x-main>
+    <x-main full-width>
         {{-- The `$slot` goes here --}}
         <x-slot:content>
             {{ $slot }}

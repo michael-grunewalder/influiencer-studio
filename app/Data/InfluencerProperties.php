@@ -24,6 +24,12 @@ class InfluencerProperties implements Castable
         public ?string $build = null,
         public ?string $custom_description = null,
         public ?string $aesthetic_vibe = null,
+        public ?string $character_sheet = null,
+        public ?string $closeup = null,
+        public ?string $detail_sheet = null,
+        public ?string $location = null,
+        public ?string $target_audience = null,
+        public ?string $physical_description = null,
     ) {}
 
     /**
@@ -63,6 +69,12 @@ class InfluencerProperties implements Castable
                     build: $data['build'] ?? null,
                     custom_description: $data['custom_description'] ?? null,
                     aesthetic_vibe: $data['aesthetic_vibe'] ?? null,
+                    character_sheet: $data['character_sheet'] ?? null,
+                    closeup: $data['closeup'] ?? null,
+                    detail_sheet: $data['detail_sheet'] ?? null,
+                    location: $data['location'] ?? null,
+                    target_audience: $data['target_audience'] ?? null,
+                    physical_description: $data['physical_description'] ?? null,
                 );
             }
 
@@ -89,6 +101,12 @@ class InfluencerProperties implements Castable
                     'build' => $value->build,
                     'custom_description' => $value->custom_description,
                     'aesthetic_vibe' => $value->aesthetic_vibe,
+                    'character_sheet' => $value->character_sheet,
+                    'closeup' => $value->closeup,
+                    'detail_sheet' => $value->detail_sheet,
+                    'location' => $value->location,
+                    'target_audience' => $value->target_audience,
+                    'physical_description' => $value->physical_description,
                 ]);
             }
         };
@@ -116,6 +134,12 @@ class InfluencerProperties implements Castable
             'build' => $this->build,
             'custom_description' => $this->custom_description,
             'aesthetic_vibe' => $this->aesthetic_vibe,
+            'character_sheet' => $this->character_sheet,
+            'closeup' => $this->closeup,
+            'detail_sheet' => $this->detail_sheet,
+            'location' => $this->location,
+            'target_audience' => $this->target_audience,
+            'physical_description' => $this->physical_description,
         ];
     }
 }

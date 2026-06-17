@@ -2,50 +2,525 @@
 
 namespace App\Livewire;
 
+use App\Data\InfluencerProperties;
 use App\Models\Influencer;
+use App\Models\Outfit;
+use Illuminate\Support\Facades\File;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
+use Livewire\WithFileUploads;
+use Masmerise\Toaster\Toaster;
 
 class Dashboard extends Component
 {
-    public $influencer;
+    use WithFileUploads;
 
-    #[Layout('layouts.app')]
-    public function render()
+    public ?string $selectedId = null;
+
+    public string $currentTab = 'profile'; // profile, photos, videos
+
+    public string $detailTab = 'overview'; // overview, scripts, wardrobe, home, brand_deals, history
+
+    // Edit properties
+    public string $edit_name = '';
+
+    public string $edit_gender = 'Female';
+
+    public string $edit_age = '';
+
+    public array $edit_niches = [];
+
+    public string $edit_backstory = '';
+
+    public int $edit_personality = 50;
+
+    public string $edit_location = '';
+
+    public string $edit_target_audience = '';
+
+    public string $edit_physical_description = '';
+
+    // File uploads
+    public $uploaded_avatar;
+
+    public $uploaded_character_sheet;
+
+    public $uploaded_closeup;
+
+    public $uploaded_detail_sheet;
+
+    // Outfit properties
+    public string $outfit_top = '';
+
+    public string $outfit_bottom = '';
+
+    public string $outfit_hairstyle = '';
+
+    public string $outfit_description = '';
+
+    public bool $showAddOutfitModal = false;
+
+    public string $newOutfitName = '';
+
+    public ?string $activeOutfitId = null;
+
+    public bool $showOutfitOverlay = false;
+
+    public array $available_niches = [
+        'Fashion', 'Beauty', 'Lifestyle', 'Fitness', 'Travel',
+        'Food & Dining', 'Tech', 'Gaming', 'Finance',
+        'Entertainment', 'Wellness', 'Sports', 'Other',
+    ];
+
+    public function mount(): void
     {
-        $this->influencer = $this->influencer();
-        return view('livewire.dashboard');
+        $first = Influencer::first();
+        if ($first) {
+            $this->selectInfluencer($first->id);
+        }
     }
 
-    private function influencer(){
-        return Influencer::all();//->paginage(8);
-        /*
-        return Influencer::hydrate([
-            [
-                'id' => 'abcd',
-                'name' => 'Person 1',
-                'avatar' => 'https://picsum.photos/720/1280',
-                'stagename' => 'Person 1',
-            ],
-            [
-                'id' => 'abcd',
-                'name' => 'Person 2',
-                'avatar' => 'https://picsum.photos/720/1280',
-                'stagename' => 'Person 2',
-            ],
-            [
-                'id' => 'abcd',
-                'name' => 'Person 3',
-                'avatar' => 'https://picsum.photos/720/1280',
-                'stagename' => 'Person 3',
-            ]
-            ,[
-                'id' => 'abcd',
-                'name' => 'Person 4',
-                'avatar' => 'https://picsum.photos/720/1280',
-                'stagename' => 'Person 4',
-            ]
+    #[Computed]
+    public function influencers()
+    {
+        return Influencer::latest()->get();
+    }
+
+    #[Computed]
+    public function selectedInfluencer()
+    {
+        if (! $this->selectedId) {
+            return null;
+        }
+
+        return Influencer::find($this->selectedId);
+    }
+
+    public function selectInfluencer(string $id): void
+    {
+        $this->selectedId = $id;
+        $this->loadInfluencerData();
+    }
+
+    public function loadInfluencerData(): void
+    {
+        $influencer = $this->selectedInfluencer;
+        if ($influencer) {
+            $this->edit_name = $influencer->name ?? '';
+            $this->edit_gender = $influencer->properties->gender ?? 'Female';
+            $this->edit_age = (string) ($influencer->properties->age ?? '');
+            $this->edit_niches = $influencer->properties->niche ?? [];
+            $this->edit_backstory = $influencer->properties->backstory ?? '';
+            $this->edit_personality = $influencer->properties->personality ?? 50;
+            $this->edit_location = $influencer->properties->location ?? '';
+            $this->edit_target_audience = $influencer->properties->target_audience ?? '';
+            $this->edit_physical_description = $influencer->properties->physical_description ?? '';
+            $this->outfit_top = '';
+            $this->outfit_bottom = '';
+            $this->outfit_hairstyle = '';
+            $this->outfit_description = '';
+            $this->activeOutfitId = null;
+            $this->showOutfitOverlay = false;
+        }
+    }
+
+    public function deleteInfluencer(string $id): void
+    {
+        $influencer = Influencer::find($id);
+        if ($influencer) {
+            $influencer->delete();
+            Toaster::success(__('Influencer gelöscht.'));
+        }
+
+        if ($this->selectedId === $id) {
+            $next = Influencer::first();
+            if ($next) {
+                $this->selectInfluencer($next->id);
+            } else {
+                $this->selectedId = null;
+                $this->resetEditFields();
+            }
+        }
+    }
+
+    private function resetEditFields(): void
+    {
+        $this->edit_name = '';
+        $this->edit_gender = 'Female';
+        $this->edit_age = '';
+        $this->edit_niches = [];
+        $this->edit_backstory = '';
+        $this->edit_personality = 50;
+        $this->edit_location = '';
+        $this->edit_target_audience = '';
+        $this->edit_physical_description = '';
+        $this->outfit_top = '';
+        $this->outfit_bottom = '';
+        $this->outfit_hairstyle = '';
+        $this->outfit_description = '';
+        $this->activeOutfitId = null;
+        $this->showOutfitOverlay = false;
+    }
+
+    public function toggleNiche(string $niche): void
+    {
+        if (in_array($niche, $this->edit_niches)) {
+            $this->edit_niches = array_diff($this->edit_niches, [$niche]);
+        } else {
+            $this->edit_niches[] = $niche;
+        }
+    }
+
+    public function saveOverview(): void
+    {
+        $influencer = $this->selectedInfluencer;
+        if (! $influencer) {
+            return;
+        }
+
+        $this->validate([
+            'edit_name' => 'required|string|min:2|max:100',
+            'edit_gender' => 'required|in:Female,Male',
+            'edit_age' => 'required|integer|min:18|max:100',
+            'edit_niches' => 'required|array|min:1',
+            'edit_backstory' => 'nullable|string|max:1000',
+            'edit_personality' => 'required|integer|min:0|max:100',
+            'edit_location' => 'nullable|string|max:100',
+            'edit_target_audience' => 'nullable|string|max:200',
+            'edit_physical_description' => 'nullable|string|max:500',
         ]);
-        */
+
+        $props = $influencer->properties ?? new InfluencerProperties;
+
+        // Update DTO attributes
+        $props->gender = $this->edit_gender;
+        $props->age = (int) $this->edit_age;
+        $props->niche = $this->edit_niches;
+        $props->backstory = $this->edit_backstory ?: null;
+        $props->personality = $this->edit_personality;
+        $props->location = $this->edit_location ?: null;
+        $props->target_audience = $this->edit_target_audience ?: null;
+        $props->physical_description = $this->edit_physical_description ?: null;
+
+        $influencer->update([
+            'name' => $this->edit_name,
+            'stagename' => $this->edit_name,
+            'bio' => $this->edit_backstory ?: $influencer->bio,
+            'properties' => $props,
+        ]);
+
+        Toaster::success(__('Änderungen erfolgreich gespeichert!'));
+    }
+
+    public function generateImage(string $field): void
+    {
+        $influencer = $this->selectedInfluencer;
+        if (! $influencer) {
+            return;
+        }
+
+        // Get all files in public/storage/influencer
+        $images = [];
+        $dir = public_path('storage/influencer');
+        if (File::isDirectory($dir)) {
+            $files = File::files($dir);
+            foreach ($files as $file) {
+                $images[] = '/storage/influencer/'.$file->getFilename();
+            }
+        }
+
+        if (empty($images)) {
+            for ($i = 1; $i <= 46; $i++) {
+                $ext = in_array($i, [3, 4, 6]) ? 'jpg' : 'png';
+                $images[] = "/storage/influencer/i{$i}.{$ext}";
+            }
+        }
+
+        $randomImage = collect($images)->random();
+
+        if ($field === 'avatar') {
+            $influencer->update(['avatar' => $randomImage]);
+        } else {
+            $props = $influencer->properties ?? new InfluencerProperties;
+            $props->{$field} = $randomImage;
+            $influencer->update(['properties' => $props]);
+        }
+
+        Toaster::success(__(':field erfolgreich generiert!', ['field' => ucfirst(str_replace('_', ' ', $field))]));
+    }
+
+    // Handles files livewire uploads
+    public function updatedUploadedAvatar(): void
+    {
+        $this->validate(['uploaded_avatar' => 'image|max:5120']);
+        $path = $this->uploaded_avatar->store('avatars', 'public');
+
+        $influencer = $this->selectedInfluencer;
+        if ($influencer) {
+            $influencer->update(['avatar' => '/storage/'.$path]);
+            Toaster::success(__('Avatar erfolgreich ersetzt!'));
+        }
+    }
+
+    public function updatedUploadedCharacterSheet(): void
+    {
+        $this->validate(['uploaded_character_sheet' => 'image|max:5120']);
+        $path = $this->uploaded_character_sheet->store('sheets', 'public');
+        $this->updatePropertyImage('character_sheet', '/storage/'.$path);
+    }
+
+    public function updatedUploadedCloseup(): void
+    {
+        $this->validate(['uploaded_closeup' => 'image|max:5120']);
+        $path = $this->uploaded_closeup->store('sheets', 'public');
+        $this->updatePropertyImage('closeup', '/storage/'.$path);
+    }
+
+    public function updatedUploadedDetailSheet(): void
+    {
+        $this->validate(['uploaded_detail_sheet' => 'image|max:5120']);
+        $path = $this->uploaded_detail_sheet->store('sheets', 'public');
+        $this->updatePropertyImage('detail_sheet', '/storage/'.$path);
+    }
+
+    private function updatePropertyImage(string $field, string $url): void
+    {
+        $influencer = $this->selectedInfluencer;
+        if ($influencer) {
+            $props = $influencer->properties ?? new InfluencerProperties;
+            $props->{$field} = $url;
+            $influencer->update(['properties' => $props]);
+            Toaster::success(__(ucfirst(str_replace('_', ' ', $field)).' erfolgreich ersetzt!'));
+        }
+    }
+
+    public function downloadImage(string $field)
+    {
+        $influencer = $this->selectedInfluencer;
+        if (! $influencer) {
+            return;
+        }
+
+        $url = ($field === 'avatar')
+            ? $influencer->avatar
+            : ($influencer->properties->{$field} ?? null);
+
+        if (! $url) {
+            Toaster::error(__('Keine Bilddatei vorhanden.'));
+
+            return;
+        }
+
+        // Map URL back to path
+        $relativePath = str_replace('/storage/', 'app/public/', $url);
+        $absolutePath = storage_path($relativePath);
+        if (! file_exists($absolutePath)) {
+            $absolutePath = public_path(str_replace('/storage/', 'storage/', $url));
+        }
+
+        if (file_exists($absolutePath)) {
+            return response()->download($absolutePath);
+        }
+
+        Toaster::error(__('Datei konnte nicht auf der Festplatte gefunden werden.'));
+    }
+
+    #[Computed]
+    public function profileCompleteness(): int
+    {
+        $influencer = $this->selectedInfluencer;
+        if (! $influencer) {
+            return 0;
+        }
+
+        $score = 0;
+        if (! empty($influencer->name)) {
+            $score += 10;
+        }
+        if ($influencer->properties->age) {
+            $score += 10;
+        }
+        if ($influencer->properties->gender) {
+            $score += 10;
+        }
+        if (! empty($influencer->properties->niche)) {
+            $score += 10;
+        }
+        if (! empty($influencer->properties->backstory)) {
+            $score += 15;
+        }
+        if ($influencer->properties->character_sheet) {
+            $score += 10;
+        }
+        if ($influencer->properties->closeup) {
+            $score += 10;
+        }
+        if ($influencer->properties->detail_sheet) {
+            $score += 10;
+        }
+        if ($influencer->properties->location) {
+            $score += 5;
+        }
+        if ($influencer->properties->physical_description) {
+            $score += 10;
+        }
+
+        return min(100, $score);
+    }
+
+    #[Computed]
+    public function generatedPrompt(): string
+    {
+        $influencer = $this->selectedInfluencer;
+        if (! $influencer) {
+            return '';
+        }
+
+        $props = $influencer->properties;
+        $name = $influencer->name;
+        $gender = $props->gender ?? 'Female';
+        $age = $props->age ?? '22';
+        $niche = implode(', ', $props->niche ?? ['Fashion']);
+        $ethnicity = $props->ethnicity ?? 'White';
+        $hair = trim(($props->hair_length ?? 'Long').' '.($props->hair_texture ?? 'Straight').' '.($props->hair_color ?? 'Blonde'));
+        $build = $props->build ?? 'Petite';
+        $vibe = $props->aesthetic_vibe ?? 'Minimalist';
+
+        return "Candid iPhone photo of {$name}, a {$age}-year-old {$gender} {$niche} influencer. ".
+               "Physical features: {$ethnicity} ethnicity, {$hair} hair, {$build} build, ".($props->skin_tone ?? 'Fair').' skin tone. '.
+               "Wearing a complete outfit reflecting the '{$vibe}' aesthetic. ".
+               'Reproducing all clothing, headwear, and accessories exactly. '.
+               'Mid-action — mid-laugh, mid-sip, mid-step, or mid-reach — body fully committed to the action, expression caught at the apex. '.
+               'Eyes can be on lens (late-arrival) or completely off-axis. Hands engaged with the action, not posed. '.
+               'Expression: direct and serious — neutral mouth at rest, steady gaze into the lens, no smile. Composed and self-assured. '.
+               'Soft morning window light from one side, cool and directional. Eye level, 24mm, handheld, f/1.8, close-up framing. '.
+               'Deep focus, no bokeh, photorealistic. No other people in frame.';
+    }
+
+    private function getRandomOutfitImage(): string
+    {
+        $images = [];
+        $dir = public_path('storage/influencer');
+        if (File::isDirectory($dir)) {
+            $files = File::files($dir);
+            foreach ($files as $file) {
+                $images[] = '/storage/influencer/'.$file->getFilename();
+            }
+        }
+
+        if (empty($images)) {
+            for ($i = 1; $i <= 46; $i++) {
+                $ext = in_array($i, [3, 4, 6]) ? 'jpg' : 'png';
+                $images[] = "/storage/influencer/i{$i}.{$ext}";
+            }
+        }
+
+        return collect($images)->random();
+    }
+
+    public function generateOutfit(): void
+    {
+        $influencer = $this->selectedInfluencer;
+        if (! $influencer) {
+            Toaster::error(__('Kein Influencer ausgewählt.'));
+
+            return;
+        }
+
+        $this->validate([
+            'outfit_top' => 'nullable|string|max:255',
+            'outfit_bottom' => 'nullable|string|max:255',
+            'outfit_hairstyle' => 'nullable|string|max:255',
+            'outfit_description' => 'nullable|string|max:1000',
+        ]);
+
+        $image = $this->getRandomOutfitImage();
+
+        $influencer->outfits()->create([
+            'name' => 'Outfit #'.($influencer->outfits()->count() + 1),
+            'top' => $this->outfit_top,
+            'bottom' => $this->outfit_bottom,
+            'hairstyle' => $this->outfit_hairstyle,
+            'full_look_description' => $this->outfit_description,
+            'image_path' => $image,
+        ]);
+
+        Toaster::success(__('Outfit erfolgreich generiert und zur Garderobe hinzugefügt!'));
+    }
+
+    public function addOutfitPrompt(): void
+    {
+        if (! $this->selectedId) {
+            Toaster::error(__('Kein Influencer ausgewählt.'));
+
+            return;
+        }
+        $this->newOutfitName = '';
+        $this->showAddOutfitModal = true;
+    }
+
+    public function saveNewOutfit(): void
+    {
+        $influencer = $this->selectedInfluencer;
+        if (! $influencer) {
+            return;
+        }
+
+        $this->validate([
+            'newOutfitName' => 'required|string|min:1|max:100',
+            'outfit_top' => 'nullable|string|max:255',
+            'outfit_bottom' => 'nullable|string|max:255',
+            'outfit_hairstyle' => 'nullable|string|max:255',
+            'outfit_description' => 'nullable|string|max:1000',
+        ]);
+
+        $image = $this->getRandomOutfitImage();
+
+        $influencer->outfits()->create([
+            'name' => $this->newOutfitName,
+            'top' => $this->outfit_top,
+            'bottom' => $this->outfit_bottom,
+            'hairstyle' => $this->outfit_hairstyle,
+            'full_look_description' => $this->outfit_description,
+            'image_path' => $image,
+        ]);
+
+        $this->showAddOutfitModal = false;
+        $this->newOutfitName = '';
+
+        Toaster::success(__('Outfit erfolgreich gespeichert!'));
+    }
+
+    public function selectOutfit(string $id): void
+    {
+        $outfit = Outfit::find($id);
+        if ($outfit) {
+            $this->outfit_top = $outfit->top ?? '';
+            $this->outfit_bottom = $outfit->bottom ?? '';
+            $this->outfit_hairstyle = $outfit->hairstyle ?? '';
+            $this->outfit_description = $outfit->full_look_description ?? '';
+            $this->activeOutfitId = $id;
+            $this->showOutfitOverlay = true;
+        }
+    }
+
+    public function deleteOutfit(string $id): void
+    {
+        $outfit = Outfit::find($id);
+        if ($outfit) {
+            $outfit->delete();
+            Toaster::success(__('Outfit gelöscht.'));
+        }
+        if ($this->activeOutfitId === $id) {
+            $this->activeOutfitId = null;
+            $this->showOutfitOverlay = false;
+        }
+    }
+
+    #[Layout('layouts.blank')]
+    public function render()
+    {
+        return view('livewire.dashboard');
     }
 }
