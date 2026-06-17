@@ -18,6 +18,8 @@ class Dashboard extends Component
     }
 
     private function influencer(){
+        return Influencer::all();//->paginage(8);
+        /*
         return Influencer::hydrate([
             [
                 'id' => 'abcd',
@@ -44,5 +46,6 @@ class Dashboard extends Component
                 'stagename' => 'Person 4',
             ]
         ]);
+        */
     }
 }

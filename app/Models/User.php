@@ -3,6 +3,8 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Notifications\ResetPasswordNotification;
+use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -14,8 +16,8 @@ use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements HasPasskeys
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, HasUuids, Notifiable, InteractsWithPasskeys, HasRoles;
+    /** @use HasFactory<UserFactory> */
+    use HasFactory, HasRoles, HasUuids, InteractsWithPasskeys, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -61,7 +63,15 @@ class User extends Authenticatable implements HasPasskeys
      */
     public function sendPasswordResetNotification($token)
     {
-        $this->notify(new \App\Notifications\ResetPasswordNotification($token));
+        $this->notify(new ResetPasswordNotification($token));
+    }
+
+    /**
+     * Get the user's full name.
+     */
+    public function getNameAttribute(): string
+    {
+        return trim("{$this->first_name} {$this->middle_name} {$this->last_name}");
     }
 
     /**
