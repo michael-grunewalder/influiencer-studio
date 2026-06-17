@@ -8,7 +8,7 @@
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="min-h-screen font-sans antialiased bg-base-200">
+<body class="min-h-screen font-sans antialiased bg-base-200 w-screen">
 
     {{-- NAVBAR mobile only --}}
     <x-nav sticky class="lg:hidden">
@@ -23,7 +23,7 @@
     </x-nav>
 
     {{-- MAIN --}}
-    <x-main>
+    <x-main full-width>
         {{-- SIDEBAR --}}
         <x-slot:sidebar drawer="main-drawer" collapsible class="bg-base-100 lg:bg-inherit">
 
