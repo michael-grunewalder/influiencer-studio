@@ -2,7 +2,9 @@
 
 use App\Livewire\Profile;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
 test('profile page is displayed', function () {
@@ -41,6 +43,41 @@ test('current password must be correct to update password', function () {
         ->set('password_confirmation', 'new-password')
         ->call('updatePassword')
         ->assertHasErrors(['current_password']);
+
+    expect(Hash::check('old-password', $user->refresh()->password))->toBeTrue();
+});
+
+test('avatar can be uploaded', function () {
+    $user = User::factory()->create();
+
+    Storage::fake('public');
+
+    $file = UploadedFile::fake()->image('avatar.jpg');
+
+    Livewire::actingAs($user)
+        ->test(Profile::class)
+        ->set('uploaded_avatar', $file)
+        ->assertHasNoErrors();
+
+    $user->refresh();
+    expect($user->avatar)->not->toBeNull();
+
+    $path = str_replace('/storage/', '', $user->avatar);
+    Storage::disk('public')->assertExists($path);
+});
+
+test('password validation is bypassed when current password is empty', function () {
+    $user = User::factory()->create([
+        'password' => Hash::make('old-password'),
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(Profile::class)
+        ->set('current_password', '')
+        ->set('password', 'new-password')
+        ->set('password_confirmation', 'new-password')
+        ->call('updatePassword')
+        ->assertHasNoErrors();
 
     expect(Hash::check('old-password', $user->refresh()->password))->toBeTrue();
 });

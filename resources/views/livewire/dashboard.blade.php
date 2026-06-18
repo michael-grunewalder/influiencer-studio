@@ -5,11 +5,19 @@
         {{-- User Info Header --}}
         @if(auth()->check())
             <div class="p-4 border-b border-base-300 flex items-center gap-3 bg-base-100/50">
-                <div class="avatar placeholder">
-                    <div class="bg-neutral text-neutral-content rounded-full w-10 h-10">
-                        <span class="text-xs font-bold">{{ auth()->user()->initials() }}</span>
+                @if(auth()->user()->avatar)
+                    <div class="avatar">
+                        <div class="w-10 h-10 rounded-full border border-base-300">
+                            <img src="{{ auth()->user()->avatar }}" alt="{{ auth()->user()->name }}" class="object-cover rounded-full" />
+                        </div>
                     </div>
-                </div>
+                @else
+                    <div class="avatar placeholder">
+                        <div class="bg-neutral text-neutral-content rounded-full w-10 h-10">
+                            <span class="text-xs font-bold">{{ auth()->user()->initials() }}</span>
+                        </div>
+                    </div>
+                @endif
                 <div class="flex-1 min-w-0">
                     <h4 class="font-bold text-sm text-base-content truncate">{{ auth()->user()->name }}</h4>
                     <div class="flex gap-2 mt-0.5">

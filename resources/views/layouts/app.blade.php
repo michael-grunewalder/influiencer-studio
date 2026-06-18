@@ -30,23 +30,36 @@
             {{-- BRAND --}}
             <x-app-brand class="px-5 pt-4" />
 
+            {{-- User Info Header --}}
+            @if($user = auth()->user())
+                <div class="px-5 py-4 border-b border-base-300 flex items-center gap-3 bg-base-100/50">
+                    @if($user->avatar)
+                        <div class="avatar">
+                            <div class="w-10 h-10 rounded-full border border-base-300">
+                                <img src="{{ $user->avatar }}" alt="{{ $user->name }}" class="object-cover rounded-full" />
+                            </div>
+                        </div>
+                    @else
+                        <div class="avatar placeholder">
+                            <div class="bg-neutral text-neutral-content rounded-full w-10 h-10">
+                                <span class="text-xs font-bold">{{ $user->initials() }}</span>
+                            </div>
+                        </div>
+                    @endif
+                    <div class="flex-1 min-w-0">
+                        <h4 class="font-bold text-sm text-base-content truncate">{{ $user->name }}</h4>
+                        <div class="flex gap-2 mt-0.5">
+                            <a href="{{ route('profile') }}" class="text-[10px] font-bold text-slate-500 hover:text-primary hover:underline" wire:navigate>Profile</a>
+                            <span class="text-[10px] text-slate-400">•</span>
+                            <a href="{{ route('logout') }}" class="text-[10px] font-bold text-slate-500 hover:text-error hover:underline">Logout</a>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
             {{-- MENU --}}
             <x-menu activate-by-route>
-
-                {{-- User --}}
-                @if($user = auth()->user())
-                    <x-menu-separator />
-
-                    <x-list-item :item="$user" value="name" sub-value="email" no-separator no-hover class="-mx-2 !-my-2 rounded">
-                        <x-slot:actions>
-                            <x-button icon="o-power" class="btn-circle btn-ghost btn-xs" tooltip-left="logoff" no-wire-navigate link="/logout" />
-                        </x-slot:actions>
-                    </x-list-item>
-
-                    <x-menu-separator />
-                @endif
-
-                <x-menu-item title="Hello" icon="o-sparkles" link="/" />
+                <x-menu-item title="Dashboard" icon="o-home" link="/" />
                 
                 <x-menu-sub title="Settings" icon="o-cog-6-tooth">
                     <x-menu-item title="Wifi" icon="o-wifi" link="####" />
