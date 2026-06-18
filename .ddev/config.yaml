@@ -7,8 +7,8 @@ xdebug_enabled: false
 additional_hostnames: []
 additional_fqdns: []
 database:
-    type: postgres
-    version: "18"
+    type: mariadb
+    version: "11.8"
 working_dir:
     web: /var/www/html
 use_dns_when_possible: true
