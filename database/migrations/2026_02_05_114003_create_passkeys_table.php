@@ -15,7 +15,7 @@ return new class extends Migration
 
         Schema::create('passkeys', function (Blueprint $table) use ($authenticatableTableName,$authenticatableClass) {
             $table->id();
-            $table->uuid('authenticatable_id');
+            $table->ulid('authenticatable_id');
 
             $table->foreign('authenticatable_id', 'passkeys_authenticatable_fk')
                 ->references('id') // or 'uuid' depending on your parent table's PK

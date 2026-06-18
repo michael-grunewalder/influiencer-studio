@@ -28,24 +28,26 @@ class PermissionAndRoleSeeder extends Seeder
         $roleUser->givePermissionTo('app.login');
 
         $sa = User::create([
-            'name' => 'Super Admin',
+            'first_name' => 'Super Admin',
             'email' => 'super-admin@example.com',
             'password' => 'password',
         ]);
         $sa->assignRole($roleSuperAdmin);
 
         $a = User::create([
-            'name' => 'Admin',
+            'first_name' => 'Admin',
             'email' => 'admin@example.com',
             'password' => 'password',
         ]);
         $sa->assignRole($roleAdmin);
 
         $u = User::create([
-            'name' => 'User',
+            'first_name' => 'User',
             'email' => 'user@example.com',
             'password' => 'password',
         ]);
         $u->assignRole($roleUser);
+
+        //More Permissions to follow
     }
 }
