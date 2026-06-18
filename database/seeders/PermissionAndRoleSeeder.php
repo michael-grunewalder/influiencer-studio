@@ -18,36 +18,48 @@ class PermissionAndRoleSeeder extends Seeder
         //
         // Reset cached roles and permissions
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
-        Permission::create(['name' => 'app.login', 'guard_name' => 'web']);
-        Permission::create(['name' => 'app.admin', 'guard_name' => 'web']);
+        Permission::findOrCreate('app.login', 'web');
+        Permission::findOrCreate('app.admin', 'web');
 
-        $roleSuperAdmin = Role::create(['name' => 'super-admin']);
-        $roleAdmin = Role::create(['name' => 'admin']);
-        $roleUser = Role::create(['name' => 'user']);
+        $roleSuperAdmin = Role::findOrCreate('super-admin', 'web');
+        $roleAdmin = Role::findOrCreate('admin', 'web');
+        $roleUser = Role::findOrCreate('user', 'web');
         $roleAdmin->givePermissionTo('app.admin');
         $roleUser->givePermissionTo('app.login');
 
-        $sa = User::create([
-            'first_name' => 'Super Admin',
-            'email' => 'super-admin@example.com',
-            'password' => 'password',
-        ]);
-        $sa->assignRole($roleSuperAdmin);
+        $sa = User::firstOrCreate(
+            ['email' => 'super-admin@example.com'],
+            [
+                'first_name' => 'Super Admin',
+                'password' => 'password',
+            ]
+        );
+        if (! $sa->hasRole($roleSuperAdmin)) {
+            $sa->assignRole($roleSuperAdmin);
+        }
 
-        $a = User::create([
-            'first_name' => 'Admin',
-            'email' => 'admin@example.com',
-            'password' => 'password',
-        ]);
-        $sa->assignRole($roleAdmin);
+        $a = User::firstOrCreate(
+            ['email' => 'admin@example.com'],
+            [
+                'first_name' => 'Admin',
+                'password' => 'password',
+            ]
+        );
+        if (! $a->hasRole($roleAdmin)) {
+            $a->assignRole($roleAdmin);
+        }
 
-        $u = User::create([
-            'first_name' => 'User',
-            'email' => 'user@example.com',
-            'password' => 'password',
-        ]);
-        $u->assignRole($roleUser);
+        $u = User::firstOrCreate(
+            ['email' => 'user@example.com'],
+            [
+                'first_name' => 'User',
+                'password' => 'password',
+            ]
+        );
+        if (! $u->hasRole($roleUser)) {
+            $u->assignRole($roleUser);
+        }
 
-        //More Permissions to follow
+        // More Permissions to follow
     }
 }

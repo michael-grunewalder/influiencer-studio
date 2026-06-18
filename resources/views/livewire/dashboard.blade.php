@@ -2,6 +2,30 @@
     
     {{-- Left Sidebar: Influencers List --}}
     <aside class="w-full lg:w-80 border-r border-base-300 flex flex-col bg-base-100 flex-shrink-0">
+        {{-- User Info Header --}}
+        @if(auth()->check())
+            <div class="p-4 border-b border-base-300 flex items-center gap-3 bg-base-100/50">
+                <div class="avatar placeholder">
+                    <div class="bg-neutral text-neutral-content rounded-full w-10 h-10">
+                        <span class="text-xs font-bold">{{ auth()->user()->initials() }}</span>
+                    </div>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h4 class="font-bold text-sm text-base-content truncate">{{ auth()->user()->name }}</h4>
+                    <div class="flex gap-2 mt-0.5">
+                        <a href="{{ route('profile') }}" class="text-[10px] font-bold text-slate-500 hover:text-primary hover:underline" wire:navigate>Profile</a>
+                        <span class="text-[10px] text-slate-400">•</span>
+                        <a href="{{ route('logout') }}" class="text-[10px] font-bold text-slate-500 hover:text-error hover:underline">Logout</a>
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        {{-- Team Selector --}}
+        <div class="p-3 border-b border-base-300 bg-base-100/30">
+            <x-select icon="o-users" :options="$this->teams" wire:model.live="selectedTeamId" class="select-sm w-full font-semibold text-xs" />
+        </div>
+
         <div class="p-4 border-b border-base-300 flex justify-between items-center bg-base-100/50">
             <span class="font-extrabold text-xs uppercase tracking-widest text-slate-500">Influencers</span>
             <div class="flex items-center gap-1">

@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Data\InfluencerProperties;
 use App\Models\Influencer;
 use App\Models\Outfit;
+use App\Models\Team;
 use Illuminate\Support\Facades\File;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -17,6 +18,8 @@ class Dashboard extends Component
     use WithFileUploads;
 
     public ?string $selectedId = null;
+
+    public ?string $selectedTeamId = null;
 
     public string $currentTab = 'profile'; // profile, photos, videos
 
@@ -75,16 +78,57 @@ class Dashboard extends Component
 
     public function mount(): void
     {
-        $first = Influencer::first();
+        if (auth()->check()) {
+            $user = auth()->user();
+            $team = $user->teams()->first();
+            if (! $team) {
+                $team = Team::create(['name' => $user->last_name ? $user->last_name."'s Team" : 'Personal Team']);
+                $user->teams()->attach($team);
+            }
+
+            if (! session()->has('active_team_id')) {
+                session(['active_team_id' => $team->id]);
+            }
+
+            $this->selectedTeamId = session('active_team_id');
+        }
+
+        $first = $this->influencers->first();
         if ($first) {
             $this->selectInfluencer($first->id);
         }
     }
 
+    public function updatedSelectedTeamId(string $value): void
+    {
+        session(['active_team_id' => $value]);
+        $first = $this->influencers->first();
+        if ($first) {
+            $this->selectInfluencer($first->id);
+        } else {
+            $this->selectedId = null;
+            $this->resetEditFields();
+        }
+    }
+
+    #[Computed]
+    public function teams()
+    {
+        if (auth()->check()) {
+            return auth()->user()->teams()->get();
+        }
+
+        return collect();
+    }
+
     #[Computed]
     public function influencers()
     {
-        return Influencer::latest()->get();
+        if (! $this->selectedTeamId) {
+            return collect();
+        }
+
+        return Influencer::where('team_id', $this->selectedTeamId)->latest()->get();
     }
 
     #[Computed]

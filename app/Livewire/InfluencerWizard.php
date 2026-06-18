@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Data\InfluencerProperties;
 use App\Models\Influencer;
+use App\Models\Team;
 use Illuminate\Support\Facades\File;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -216,7 +217,19 @@ class InfluencerWizard extends Component
             aesthetic_vibe: $this->aesthetic_vibe ?: null,
         );
 
+        $teamId = session('active_team_id');
+        if (! $teamId && auth()->check()) {
+            $user = auth()->user();
+            $team = Team::first() ?: Team::create(['name' => $user->last_name ? $user->last_name."'s Team" : 'Personal Team']);
+            if (! $user->teams()->where('teams.id', $team->id)->exists()) {
+                $user->teams()->attach($team);
+            }
+            $teamId = $team->id;
+            session(['active_team_id' => $teamId]);
+        }
+
         $influencer = Influencer::create([
+            'team_id' => $teamId,
             'name' => $this->name,
             'stagename' => $this->name, // Stage name matches name by default
             'avatar' => $randomAvatar,

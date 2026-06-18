@@ -21,5 +21,8 @@ class DatabaseSeeder extends Seeder
         ]);
         */
         $this->call(PermissionAndRoleSeeder::class);
+        if (app()->environment() !== 'production') {
+            $this->call(DemoDataSeeder::class);
+        }
     }
 }

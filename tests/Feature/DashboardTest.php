@@ -3,12 +3,18 @@
 use App\Data\InfluencerProperties;
 use App\Livewire\Dashboard;
 use App\Models\Influencer;
+use App\Models\Team;
 use App\Models\User;
 use Livewire\Livewire;
 
 test('dashboard is accessible by authenticated users and displays influencers', function () {
+    $team = Team::create(['name' => 'Test Team']);
     $user = User::factory()->create();
+    $user->teams()->attach($team->id);
+    session(['active_team_id' => $team->id]);
+
     $influencer = Influencer::create([
+        'team_id' => $team->id,
         'name' => 'Carla Lopez',
         'avatar' => 'https://picsum.photos/720/1280',
         'bio' => 'Fashion influencer.',
@@ -26,8 +32,13 @@ test('dashboard is accessible by authenticated users and displays influencers', 
 });
 
 test('authenticated user can select an influencer and edit metadata', function () {
+    $team = Team::create(['name' => 'Test Team']);
     $user = User::factory()->create();
+    $user->teams()->attach($team->id);
+    session(['active_team_id' => $team->id]);
+
     $influencer = Influencer::create([
+        'team_id' => $team->id,
         'name' => 'Marcus Aurelius',
         'avatar' => 'https://picsum.photos/720/1280',
         'properties' => new InfluencerProperties(
@@ -56,8 +67,13 @@ test('authenticated user can select an influencer and edit metadata', function (
 });
 
 test('user can generate and download sheet images', function () {
+    $team = Team::create(['name' => 'Test Team']);
     $user = User::factory()->create();
+    $user->teams()->attach($team->id);
+    session(['active_team_id' => $team->id]);
+
     $influencer = Influencer::create([
+        'team_id' => $team->id,
         'name' => 'Elena Drake',
         'avatar' => 'https://picsum.photos/720/1280',
         'properties' => new InfluencerProperties(
@@ -78,8 +94,13 @@ test('user can generate and download sheet images', function () {
 });
 
 test('user can delete an influencer on dashboard', function () {
+    $team = Team::create(['name' => 'Test Team']);
     $user = User::factory()->create();
+    $user->teams()->attach($team->id);
+    session(['active_team_id' => $team->id]);
+
     $influencer = Influencer::create([
+        'team_id' => $team->id,
         'name' => 'Kayla Croft',
         'avatar' => 'https://picsum.photos/720/1280',
         'properties' => new InfluencerProperties(
