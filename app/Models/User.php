@@ -147,5 +147,13 @@ class User extends Authenticatable implements HasPasskeys
 
         $this->decrement('credits', $amount);
         $team->increment('credits', $amount);
+
+        Transaction::create([
+            'user_id' => $this->id,
+            'team_id' => $team->id,
+            'type' => 'transfer',
+            'amount' => $amount,
+            'description' => 'Transfer vom persönlichen Wallet zum Team: '.$team->name,
+        ]);
     }
 }

@@ -48,6 +48,14 @@ class Team extends Model
     {
         $cost = $imageCount * 0.35;
         $this->decrement('credits', $cost);
+
+        Transaction::create([
+            'user_id' => auth()->id(),
+            'team_id' => $this->id,
+            'type' => 'spending',
+            'amount' => -$cost,
+            'description' => 'Medien-Generierung ('.$imageCount.' Bild'.($imageCount > 1 ? 'er' : '').')',
+        ]);
     }
 
     public function users(): BelongsToMany

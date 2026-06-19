@@ -3,7 +3,9 @@
 namespace App\Livewire;
 
 use App\Models\Team;
+use App\Models\Transaction;
 use App\Services\PaymentGatewayService;
+use Livewire\Attributes\Computed;
 use Livewire\Component;
 use Masmerise\Toaster\Toaster;
 
@@ -14,6 +16,10 @@ class TopUp extends Component
     public string $allocationMode = 'all_team'; // all_team, all_personal, split
 
     public string $teamAmount = '';
+
+    public string $transferAmount = '';
+
+    public string $activeTab = 'topup'; // topup, history, team_journal
 
     // Card Details
     public string $cardholder_name = '';
@@ -76,6 +82,13 @@ class TopUp extends Component
             $user = auth()->user();
             if ($userAllocation > 0) {
                 $user->increment('credits', $userAllocation);
+                Transaction::create([
+                    'user_id' => $user->id,
+                    'team_id' => null,
+                    'type' => 'topup',
+                    'amount' => $userAllocation,
+                    'description' => 'Aufladung des persönlichen Wallets',
+                ]);
             }
 
             if ($teamAllocation > 0) {
@@ -92,6 +105,13 @@ class TopUp extends Component
                 }
 
                 $team->increment('credits', $teamAllocation);
+                Transaction::create([
+                    'user_id' => $user->id,
+                    'team_id' => $team->id,
+                    'type' => 'topup',
+                    'amount' => $teamAllocation,
+                    'description' => 'Direkte Guthaben-Aufladung des Teams: '.$team->name,
+                ]);
             }
 
             $this->dispatch('credits-updated');
@@ -110,6 +130,83 @@ class TopUp extends Component
         } catch (\Exception $e) {
             Toaster::error(__('Zahlung fehlgeschlagen: :message', ['message' => $e->getMessage()]));
         }
+    }
+
+    public function transferToTeam(): void
+    {
+        $user = auth()->user();
+        $this->validate([
+            'transferAmount' => ['required', 'numeric', 'min:0.01', 'max:'.$user->credits],
+        ], [
+            'transferAmount.max' => 'Der Transferbetrag darf Ihr persönliches Wallet-Guthaben nicht überschreiten.',
+        ]);
+
+        $activeTeamId = session('active_team_id');
+        $team = $activeTeamId ? $user->teams()->where('team_id', $activeTeamId)->first() : null;
+        if (! $team) {
+            $team = $user->teams()->first();
+        }
+
+        if (! $team) {
+            $team = Team::create(['name' => $user->last_name ? $user->last_name."'s Team" : 'Personal Team']);
+            $user->teams()->attach($team);
+            session(['active_team_id' => $team->id]);
+        }
+
+        $amount = (float) $this->transferAmount;
+
+        try {
+            $user->transferCreditsToTeam($team, $amount);
+
+            $this->dispatch('credits-updated');
+
+            Toaster::success(__(':amount Credits erfolgreich auf das Team ":team" übertragen!', [
+                'amount' => '$'.number_format($amount, 2),
+                'team' => $team->name,
+            ]));
+
+            $this->reset('transferAmount');
+        } catch (\Exception $e) {
+            Toaster::error(__('Transfer fehlgeschlagen: :message', ['message' => $e->getMessage()]));
+        }
+    }
+
+    #[Computed]
+    public function personalTransactions()
+    {
+        return Transaction::where('user_id', auth()->id())
+            ->latest()
+            ->get();
+    }
+
+    #[Computed]
+    public function teamTransactions()
+    {
+        $user = auth()->user();
+        $activeTeamId = session('active_team_id');
+        $team = $activeTeamId ? $user->teams()->where('team_id', $activeTeamId)->first() : null;
+        if (! $team) {
+            $team = $user->teams()->first();
+        }
+
+        if (! $team) {
+            return collect();
+        }
+
+        // Admins & Managers can see all transactions
+        if ($user->hasTeamRole($team, ['admin', 'manage'])) {
+            return Transaction::where('team_id', $team->id)
+                ->with('user')
+                ->latest()
+                ->get();
+        }
+
+        // Standard members can only see their own transactions
+        return Transaction::where('team_id', $team->id)
+            ->where('user_id', $user->id)
+            ->with('user')
+            ->latest()
+            ->get();
     }
 
     public function render()
