@@ -27,6 +27,10 @@ class Login extends Component
             request()->session()->regenerate();
             Toaster::success('Willkommen zurück!');
 
+            if (session()->has('pending_invitation_url')) {
+                return redirect()->to(session()->pull('pending_invitation_url'));
+            }
+
             return redirect()->intended('/dashboard');
         }
 

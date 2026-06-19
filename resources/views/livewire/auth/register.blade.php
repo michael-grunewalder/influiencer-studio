@@ -12,7 +12,7 @@
                 <x-form wire:submit="sendOtp">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <x-input label="Name" wire:model="name" icon="o-user" class="text-white" inline />
-                        <x-input label="E-Mail" wire:model="email" icon="o-envelope" class="text-white" inline />
+                        <x-input label="E-Mail" wire:model="email" icon="o-envelope" class="text-white" inline :disabled="$email_disabled" />
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                         <x-input label="Passwort" wire:model="password" type="password" icon="o-key" class="text-white" inline />

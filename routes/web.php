@@ -1,5 +1,6 @@
 <?php
 
+use App\Livewire\AcceptInvitation;
 use App\Livewire\Auth\ForgotPassword;
 use App\Livewire\Auth\Login;
 use App\Livewire\Auth\Register;
@@ -7,6 +8,7 @@ use App\Livewire\Auth\ResetPassword;
 use App\Livewire\Dashboard;
 use App\Livewire\InfluencerWizard;
 use App\Livewire\Profile;
+use App\Livewire\Teams;
 use Illuminate\Support\Facades\Route;
 
 Route::passkeys();
@@ -23,8 +25,11 @@ Route::middleware('guest')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::get('/profile', Profile::class)->name('profile');
     Route::get('/influencer/create', InfluencerWizard::class)->name('influencers.create');
-    Route::livewire('/', Dashboard::class);
+    Route::get('/teams', Teams::class)->name('teams');
+    Route::get('/', Dashboard::class)->name('dashboard');
 });
+
+Route::get('/teams/accept/{token}', AcceptInvitation::class)->name('teams.accept')->middleware('signed');
 
 Route::get('/logout', function () {
     auth()->logout();

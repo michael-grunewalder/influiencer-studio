@@ -90,6 +90,43 @@ class User extends Authenticatable implements HasPasskeys
 
     public function teams(): BelongsToMany
     {
-        return $this->belongsToMany(Team::class);
+        return $this->belongsToMany(Team::class)->withPivot('role');
+    }
+
+    public function hasTeamRole(Team|string $team, string|array $roles): bool
+    {
+        if ($this->hasPermissionTo('team.view-all')) {
+            return true;
+        }
+
+        $teamId = $team instanceof Team ? $team->id : $team;
+        if (! $teamId) {
+            return false;
+        }
+
+        $member = $this->teams()->where('team_id', $teamId)->first();
+        if (! $member) {
+            return false;
+        }
+
+        $userRole = $member->pivot->role;
+
+        if (is_array($roles)) {
+            return in_array($userRole, $roles);
+        }
+
+        if ($roles === 'admin') {
+            return $userRole === 'admin';
+        }
+
+        if ($roles === 'manage') {
+            return in_array($userRole, ['admin', 'manage']);
+        }
+
+        if ($roles === 'view') {
+            return in_array($userRole, ['admin', 'manage', 'view']);
+        }
+
+        return false;
     }
 }

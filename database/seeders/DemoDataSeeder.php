@@ -42,16 +42,46 @@ class DemoDataSeeder extends Seeder
         // 3. Attach teams
         // Alpha: Team 1, Team 2, Team 5
         $userAlpha->teams()->attach([
-            $teams[0]->id,
-            $teams[1]->id,
-            $teams[4]->id,
+            $teams[0]->id => ['role' => 'view'],
+            $teams[1]->id => ['role' => 'view'],
+            $teams[4]->id => ['role' => 'view'],
         ]);
+        $userAlpha->givePermissionTo('team.view');
 
         // Beta: Team 3, Team 4, Team 5
         $userBeta->teams()->attach([
-            $teams[2]->id,
-            $teams[3]->id,
-            $teams[4]->id,
+            $teams[2]->id => ['role' => 'view'],
+            $teams[3]->id => ['role' => 'view'],
+            $teams[4]->id => ['role' => 'view'],
+        ]);
+        $userBeta->givePermissionTo('team.view');
+
+        // team-admin@example.com (password: password123, team 1 & 3: view, team 5: admin)
+        $teamAdmin = User::factory()->create([
+            'first_name' => 'Team',
+            'last_name' => 'Admin',
+            'email' => 'team-admin@example.com',
+            'password' => Hash::make('password123'),
+        ]);
+        $teamAdmin->givePermissionTo('team.view');
+        $teamAdmin->teams()->attach([
+            $teams[0]->id => ['role' => 'view'],
+            $teams[2]->id => ['role' => 'view'],
+            $teams[4]->id => ['role' => 'admin'],
+        ]);
+
+        // team-manager@example.com (password: password123, team 1 & 3: view, team 5: manage)
+        $teamManager = User::factory()->create([
+            'first_name' => 'Team',
+            'last_name' => 'Manager',
+            'email' => 'team-manager@example.com',
+            'password' => Hash::make('password123'),
+        ]);
+        $teamManager->givePermissionTo('team.view');
+        $teamManager->teams()->attach([
+            $teams[0]->id => ['role' => 'view'],
+            $teams[2]->id => ['role' => 'view'],
+            $teams[4]->id => ['role' => 'manage'],
         ]);
 
         // 4. Create influencers for each team (up to 12)

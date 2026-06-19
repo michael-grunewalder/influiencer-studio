@@ -61,5 +61,9 @@ class PermissionAndRoleSeeder extends Seeder
         }
 
         // More Permissions to follow
+        Permission::findOrCreate('team.view-all', 'web');
+        Permission::findOrCreate('team.view', 'web');
+        Permission::findOrCreate('team.manage', 'web');
+        Permission::findOrCreate('team.admin', 'web');
     }
 }

@@ -57,14 +57,9 @@
                 </div>
             @endif
 
-            {{-- MENU --}}
             <x-menu activate-by-route>
                 <x-menu-item title="Dashboard" icon="o-home" link="/" />
-                
-                <x-menu-sub title="Settings" icon="o-cog-6-tooth">
-                    <x-menu-item title="Wifi" icon="o-wifi" link="####" />
-                    <x-menu-item title="Archives" icon="o-archive-box" link="####" />
-                </x-menu-sub>
+                <x-menu-item title="Teams" icon="o-users" link="/teams" />
             </x-menu>
         </x-slot:sidebar>
 

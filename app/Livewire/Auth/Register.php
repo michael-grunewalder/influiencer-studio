@@ -3,6 +3,7 @@
 namespace App\Livewire\Auth;
 
 use App\Mail\OtpCodeMail;
+use App\Models\TeamInvitation;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -23,10 +24,30 @@ class Register extends Component
 
     public string $password_confirmation = '';
 
+    public string $invitation_token = '';
+
+    public bool $email_disabled = false;
+
     // Felder für Schritt 2 (OTP)
     public string $otp = '';
 
     public int $step = 1; // 1 = Daten, 2 = OTP-Eingabe
+
+    public function mount(): void
+    {
+        $token = request()->query('invitation');
+        if ($token) {
+            $invitation = TeamInvitation::where('token', $token)->first();
+            if ($invitation) {
+                $this->invitation_token = $token;
+                $this->email = $invitation->email;
+                $this->email_disabled = true;
+                if ($invitation->name) {
+                    $this->name = $invitation->name;
+                }
+            }
+        }
+    }
 
     public function sendOtp()
     {
@@ -68,26 +89,47 @@ class Register extends Component
             return;
         }
 
-        //bearny get his axe out of th ebackpack and chops the name mercilessly into small pieces
-        $cNames = collect(explode(" ", $this->name));
+        // bearny get his axe out of th ebackpack and chops the name mercilessly into small pieces
+        $cNames = collect(explode(' ', $this->name));
         $firstName = $cNames->shift();
         $lastName = $cNames->pop();
-        $middleName = $cNames->implode(" ");
-
+        $middleName = $cNames->implode(' ');
 
         // User final anlegen
         $user = User::create([
-            'first_name'        => $firstName,
-            'middle_name'       => $middleName,
-            'last_name'         => $lastName,
-            'email'             => $this->email,
-            'password'          => Hash::make($this->password),
+            'first_name' => $firstName,
+            'middle_name' => $middleName,
+            'last_name' => $lastName,
+            'email' => $this->email,
+            'password' => Hash::make($this->password),
             'email_verified_at' => now(), // Direkt als verifiziert markieren
         ]);
 
         auth()->login($user);
 
         DB::table('otp_codes')->where('email', $this->email)->delete();
+
+        // Check for invitation
+        $invitation = null;
+        if (! empty($this->invitation_token)) {
+            $invitation = TeamInvitation::where('token', $this->invitation_token)->first();
+        }
+        if (! $invitation) {
+            $invitation = TeamInvitation::where('email', $user->email)->first();
+        }
+
+        if ($invitation) {
+            $team = $invitation->team;
+            if (! $team->users()->where('user_id', $user->id)->exists()) {
+                $team->users()->attach($user->id, ['role' => 'view']);
+            }
+            if (! $user->hasPermissionTo('team.view')) {
+                $user->givePermissionTo('team.view');
+            }
+            $invitation->delete();
+            Toaster::success(__('Konto erstellt und dem Team beigetreten!'));
+        }
+        session()->forget('pending_invitation_url');
 
         return redirect()->route('dashboard');
     }
