@@ -116,3 +116,27 @@ test('falai service throws exception if no API key is configured', function () {
     expect(fn () => $service->generate($team, 'Test prompt'))
         ->toThrow(Exception::class, 'No API key configured for the team or globally.');
 });
+
+test('falai service bypasses API and returns watermarked demo image if key is bearny-codes', function () {
+    $team = Team::create([
+        'name' => 'Design Team',
+        'credits' => 0.00,
+    ]);
+
+    config(['services.fal.key' => 'bearny-codes']);
+
+    Http::preventStrayRequests();
+
+    $service = new FalAiService;
+    $result = $service->generate($team, 'Test prompt');
+
+    expect($result)->toHaveKey('images');
+    $url = $result['images'][0]['url'];
+    expect($url)->toStartWith('/storage/references/demo_');
+    expect($url)->toEndWith('.png');
+
+    $filePath = public_path($url);
+    expect(file_exists($filePath))->toBeTrue();
+
+    @unlink($filePath);
+});
