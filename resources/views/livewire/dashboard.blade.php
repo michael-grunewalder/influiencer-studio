@@ -29,6 +29,8 @@
             </div>
         @endif
 
+        <livewire:sidebar-balances />
+
         {{-- Team Selector --}}
         <div class="p-3 border-b border-base-300 bg-base-100/30">
             <x-select icon="o-users" :options="$this->teams" wire:model.live="selectedTeamId" class="select-sm w-full font-semibold text-xs" />

@@ -117,10 +117,10 @@ test('falai service throws exception if no API key is configured', function () {
         ->toThrow(Exception::class, 'No API key configured for the team or globally.');
 });
 
-test('falai service bypasses API and returns watermarked demo image if key is bearny-codes', function () {
+test('falai service bypasses API, returns watermarked demo image, and deducts credits if key is bearny-codes in local env', function () {
     $team = Team::create([
         'name' => 'Design Team',
-        'credits' => 0.00,
+        'credits' => 10.00,
     ]);
 
     config(['services.fal.key' => 'bearny-codes']);
@@ -139,4 +139,41 @@ test('falai service bypasses API and returns watermarked demo image if key is be
     expect(file_exists($filePath))->toBeTrue();
 
     @unlink($filePath);
+
+    // Assert credits were deducted: 10.00 - 0.35 = 9.65
+    expect((float) $team->refresh()->credits)->toBe(9.65);
+});
+
+test('falai service does not bypass API if key is bearny-codes in non-local env', function () {
+    $team = Team::create([
+        'name' => 'Design Team',
+        'credits' => 10.00,
+    ]);
+
+    config(['services.fal.key' => 'bearny-codes']);
+
+    // Change environment to production
+    $originalEnv = app()->environment();
+    app()->detectEnvironment(fn () => 'production');
+
+    Http::fake([
+        'https://fal.run/*' => Http::response([
+            'images' => [['url' => 'https://v3.fal.media/mock-production.png']],
+        ], 200),
+    ]);
+
+    $service = new FalAiService;
+
+    try {
+        $result = $service->generate($team, 'Test prompt');
+
+        expect($result)->toHaveKey('images');
+        expect($result['images'][0]['url'])->toBe('https://v3.fal.media/mock-production.png');
+
+        // Assert credits were deducted
+        expect((float) $team->refresh()->credits)->toBe(9.65);
+    } finally {
+        // Restore environment
+        app()->detectEnvironment(fn () => $originalEnv);
+    }
 });

@@ -57,9 +57,12 @@
                 </div>
             @endif
 
+            <livewire:sidebar-balances />
+
             <x-menu activate-by-route>
                 <x-menu-item title="Dashboard" icon="o-home" link="/" />
                 <x-menu-item title="Teams" icon="o-users" link="/teams" />
+                <x-menu-item title="Top Up" icon="o-credit-card" link="/top-up" />
             </x-menu>
         </x-slot:sidebar>
 

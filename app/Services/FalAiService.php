@@ -18,8 +18,12 @@ class FalAiService
         $apiKey = $resolved['apiKey'];
         $shouldCharge = $resolved['shouldCharge'];
 
-        if ($apiKey === 'bearny-codes') {
+        if ($apiKey === 'bearny-codes' && app()->environment('local', 'testing')) {
             $url = $this->generateDemoImage();
+
+            if ($shouldCharge) {
+                $team->chargeForImages(1);
+            }
 
             return [
                 'images' => [
@@ -77,7 +81,7 @@ class FalAiService
         $apiKey = $resolved['apiKey'];
         $shouldCharge = $resolved['shouldCharge'];
 
-        if ($apiKey === 'bearny-codes') {
+        if ($apiKey === 'bearny-codes' && app()->environment('local', 'testing')) {
             $results = [];
             foreach ($prompts as $index => $prompt) {
                 $results[$index] = [
@@ -85,6 +89,10 @@ class FalAiService
                         ['url' => $this->generateDemoImage()],
                     ],
                 ];
+            }
+
+            if ($shouldCharge) {
+                $team->chargeForImages($imageCount);
             }
 
             return $results;
@@ -166,13 +174,6 @@ class FalAiService
         $apiKey = config('services.fal.key');
         if (! $apiKey) {
             throw new \Exception('No API key configured for the team or globally.');
-        }
-
-        if ($apiKey === 'bearny-codes') {
-            return [
-                'apiKey' => $apiKey,
-                'shouldCharge' => false,
-            ];
         }
 
         $cost = $imageCount * 0.35;

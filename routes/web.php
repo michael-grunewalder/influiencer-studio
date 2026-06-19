@@ -9,6 +9,7 @@ use App\Livewire\Dashboard;
 use App\Livewire\InfluencerWizard;
 use App\Livewire\Profile;
 use App\Livewire\Teams;
+use App\Livewire\TopUp;
 use Illuminate\Support\Facades\Route;
 
 Route::passkeys();
@@ -26,6 +27,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', Profile::class)->name('profile');
     Route::get('/influencer/create', InfluencerWizard::class)->name('influencers.create');
     Route::get('/teams', Teams::class)->name('teams');
+    Route::get('/top-up', TopUp::class)->name('top-up');
     Route::get('/', Dashboard::class)->name('dashboard');
 });
 
