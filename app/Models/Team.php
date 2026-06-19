@@ -20,13 +20,34 @@ class Team extends Model
         'id',
         'name',
         'description',
+        'fal_api_key',
+        'credits',
     ];
 
     protected function casts(): array
     {
         return [
             'id' => 'string',
+            'credits' => 'decimal:2',
         ];
+    }
+
+    public function hasFalApiKey(): bool
+    {
+        return ! empty($this->fal_api_key);
+    }
+
+    public function hasCreditsFor(int $imageCount): bool
+    {
+        $required = $imageCount * 0.35;
+
+        return (float) $this->credits >= $required;
+    }
+
+    public function chargeForImages(int $imageCount): void
+    {
+        $cost = $imageCount * 0.35;
+        $this->decrement('credits', $cost);
     }
 
     public function users(): BelongsToMany

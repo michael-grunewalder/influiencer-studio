@@ -5,6 +5,8 @@ namespace App\Livewire;
 use App\Data\InfluencerProperties;
 use App\Models\Influencer;
 use App\Models\Team;
+use App\Services\FalAiService;
+use App\Services\PromptBuilderService;
 use Illuminate\Support\Facades\File;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -59,6 +61,10 @@ class InfluencerWizard extends Component
     public bool $is_generating = false;
 
     public bool $is_done = false;
+
+    public array $generated_variations = [];
+
+    public int $selected_variation_index = 0;
 
     public ?string $generated_id = null;
 
@@ -121,7 +127,6 @@ class InfluencerWizard extends Component
             }
         }
 
-        // Fallback or ensure we have elements
         if (empty($images)) {
             for ($i = 1; $i <= 46; $i++) {
                 $ext = in_array($i, [3, 4, 6]) ? 'jpg' : 'png';
@@ -129,7 +134,6 @@ class InfluencerWizard extends Component
             }
         }
 
-        // Shuffle images to make left and right slideshows look different
         $this->slideshow_images = $images;
     }
 
@@ -149,8 +153,28 @@ class InfluencerWizard extends Component
         if ($this->step < 4) {
             $this->step++;
         } elseif ($this->step === 4) {
+            $team = $this->getActiveTeam();
+            if (! $team) {
+                Toaster::error(__('Kein aktives Team gefunden. Bitte melde dich an oder erstelle ein Team.'));
+
+                return;
+            }
+
+            if (! $team->hasFalApiKey() && ! $team->hasCreditsFor(3)) {
+                $cost = 3 * 0.35;
+                Toaster::error(sprintf(
+                    __('Ungenügendes Guthaben! Für 3 Variationen werden $%s benötigt. Aktuelles Guthaben: $%s. Hinterlege einen API-Key für das Team oder lade dein Guthaben auf.'),
+                    number_format($cost, 2),
+                    number_format($team->credits, 2)
+                ));
+
+                return;
+            }
+
             $this->step = 5;
             $this->is_generating = true;
+            $this->is_done = false;
+            $this->generated_variations = [];
         }
     }
 
@@ -175,14 +199,74 @@ class InfluencerWizard extends Component
         Toaster::info(__('Zufällige Merkmale ausgewählt!'));
     }
 
+    /**
+     * Call Fal.ai parallel generation endpoint to build 3 variations.
+     */
+    public function generate(FalAiService $falAiService): void
+    {
+        if (! $this->is_generating || ! empty($this->generated_variations)) {
+            return;
+        }
+
+        try {
+            $team = $this->getActiveTeam();
+            if (! $team) {
+                throw new \Exception(__('Kein aktives Team gefunden.'));
+            }
+
+            $physicalDesc = PromptBuilderService::buildPhysicalDescString($this);
+
+            $prompts = PromptBuilderService::buildThreeVariationPrompts([
+                'gender' => $this->gender,
+                'age' => $this->age,
+                'niches' => $this->niches,
+                'backstory' => $this->backstory,
+                'personality' => $this->personality,
+                'ethnicity' => $this->ethnicity,
+                'skin_tone' => $this->skin_tone,
+                'hair_color' => $this->hair_color,
+                'hair_length' => $this->hair_length,
+                'hair_texture' => $this->hair_texture,
+                'eye_color' => $this->eye_color,
+                'build' => $this->build,
+                'custom_description' => $this->custom_description,
+                'aesthetic_vibe' => $this->aesthetic_vibe,
+                'physicalDesc' => $physicalDesc,
+            ], '9:16', 'gpt_image_2');
+
+            $results = $falAiService->generateParallel($team, $prompts, 'fal-ai/flux/schnell', [
+                'aspect_ratio' => '9:16',
+            ]);
+
+            $urls = [];
+            foreach ($results as $res) {
+                if (isset($res['images'][0]['url'])) {
+                    $urls[] = $res['images'][0]['url'];
+                }
+            }
+
+            if (count($urls) < 3) {
+                throw new \Exception(__('Fal.ai hat nicht genug Bilder zurückgegeben.'));
+            }
+
+            $this->generated_variations = $urls;
+            $this->selected_variation_index = 0;
+            $this->is_generating = false;
+
+            Toaster::success(__('Variationen erfolgreich generiert! Wähle deinen Favoriten.'));
+        } catch (\Throwable $e) {
+            $this->is_generating = false;
+            $this->step = 4;
+            Toaster::error(__('Fehler bei der Bildgenerierung: ').$e->getMessage());
+        }
+    }
+
     public function finishGeneration(): void
     {
-        // Prevent double generation
         if ($this->is_done) {
             return;
         }
 
-        // Final save
         $facePath = null;
         if ($this->face_reference) {
             $facePath = $this->face_reference->store('references', 'public');
@@ -193,11 +277,9 @@ class InfluencerWizard extends Component
             $stylePath = $this->style_reference->store('references', 'public');
         }
 
-        // We pick a random slideshow image as the avatar for this generated influencer
-        $randomAvatar = collect($this->slideshow_images)->random() ?? 'https://picsum.photos/720/1280';
-        $this->generated_avatar = $randomAvatar;
+        $selectedAvatar = $this->generated_variations[$this->selected_variation_index] ?? 'https://picsum.photos/720/1280';
+        $this->generated_avatar = $selectedAvatar;
 
-        // Build properties DTO
         $properties = new InfluencerProperties(
             gender: $this->gender,
             age: (int) $this->age,
@@ -215,33 +297,53 @@ class InfluencerWizard extends Component
             build: $this->build,
             custom_description: $this->custom_description ?: null,
             aesthetic_vibe: $this->aesthetic_vibe ?: null,
+            closeup: $selectedAvatar,
         );
 
-        $teamId = session('active_team_id');
-        if (! $teamId && auth()->check()) {
-            $user = auth()->user();
-            $team = Team::first() ?: Team::create(['name' => $user->last_name ? $user->last_name."'s Team" : 'Personal Team']);
-            if (! $user->teams()->where('teams.id', $team->id)->exists()) {
-                $user->teams()->attach($team);
-            }
-            $teamId = $team->id;
-            session(['active_team_id' => $teamId]);
-        }
+        $team = $this->getActiveTeam();
+        $teamId = $team ? $team->id : null;
 
         $influencer = Influencer::create([
             'team_id' => $teamId,
             'name' => $this->name,
-            'stagename' => $this->name, // Stage name matches name by default
-            'avatar' => $randomAvatar,
+            'stagename' => $this->name,
+            'avatar' => $selectedAvatar,
             'bio' => $this->backstory ?: ($this->name.' is a digital influencer specialized in '.implode(', ', $this->niches).'.'),
             'properties' => $properties,
         ]);
 
         $this->generated_id = $influencer->id;
-        $this->is_generating = false;
         $this->is_done = true;
 
         Toaster::success(__('Influencer erfolgreich generiert!'));
+    }
+
+    private function getActiveTeam(): ?Team
+    {
+        $teamId = session('active_team_id');
+        if ($teamId) {
+            return Team::find($teamId);
+        }
+
+        if (auth()->check()) {
+            $user = auth()->user();
+            $team = $user->teams()->first();
+            if ($team) {
+                session(['active_team_id' => $team->id]);
+
+                return $team;
+            }
+
+            $team = Team::first() ?: Team::create(['name' => $user->last_name ? $user->last_name."'s Team" : 'Personal Team']);
+            if (! $user->teams()->where('teams.id', $team->id)->exists()) {
+                $user->teams()->attach($team);
+            }
+            session(['active_team_id' => $team->id]);
+
+            return $team;
+        }
+
+        return null;
     }
 
     private function validateCurrentStep(): void

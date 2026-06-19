@@ -548,13 +548,6 @@
                                 @endforeach
                             </div>
                         </div>
-                    </div>
-
-                    {{-- Actions --}}
-                    <div class="pt-4 flex justify-between">
-                        <button type="button" wire:click="previousStep" class="btn btn-sm btn-outline border-base-300 font-bold px-6">
-                            ← Back
-                        </button>
                         <button type="button" wire:click="nextStep" class="btn btn-primary font-bold px-8 shadow-md shadow-primary/15">
                             Continue to Generate <span class="font-mono">→</span>
                         </button>
@@ -566,16 +559,7 @@
             @if($step === 5)
                 @if($is_generating)
                     {{-- Generation Animation --}}
-                    <div class="py-12 flex flex-col items-center justify-center text-center space-y-6"
-                         x-data="{ progress: 0 }"
-                         x-init="let interval = setInterval(() => { 
-                             if (progress < 100) { 
-                                 progress += 2.5; 
-                             } else { 
-                                 clearInterval(interval); 
-                                 $wire.finishGeneration(); 
-                             } 
-                         }, 75)">
+                    <div class="py-12 flex flex-col items-center justify-center text-center space-y-6" wire:init="generate">
                         
                         {{-- Glowing Sphere using standard primary theme pulse --}}
                         <div class="relative w-28 h-28 flex items-center justify-center">
@@ -588,19 +572,60 @@
                         </div>
 
                         <div>
-                            <h2 class="text-2xl font-bold text-base-content tracking-tight animate-pulse">Generating influencer...</h2>
-                            <p class="text-slate-500 text-sm mt-1 max-w-sm">We are synthesizing physical traits, backstory, and style references to build the digital persona.</p>
+                            <h2 class="text-2xl font-bold text-base-content tracking-tight animate-pulse">Generating look variations...</h2>
+                            <p class="text-slate-500 text-sm mt-1 max-w-sm">We are synthesizing physical traits, backstory, and style references to build three distinct look variations via Fal.ai.</p>
                         </div>
 
-                        {{-- Progress Bar using standard DaisyUI styling --}}
+                        {{-- Marquee progress simulation since it is a real loading state --}}
                         <div class="w-full max-w-sm space-y-1">
-                            <div class="h-2.5 w-full bg-base-200 border border-base-300 rounded-full overflow-hidden">
-                                <div class="h-full bg-primary rounded-full transition-all duration-75" :style="{ width: progress + '%' }"></div>
+                            <div class="h-2.5 w-full bg-base-200 border border-base-300 rounded-full overflow-hidden relative">
+                                <div class="h-full bg-primary rounded-full w-1/3 absolute left-0 animate-ping" style="animation-duration: 2s;"></div>
                             </div>
                             <div class="flex justify-between text-[10px] text-slate-500 font-extrabold tracking-wider pt-1.5">
-                                <span>SYNTHESIZING</span>
-                                <span x-text="Math.floor(progress) + '%'"></span>
+                                <span>FAL.AI PROCESSING</span>
+                                <span class="animate-pulse">REAL-TIME</span>
                             </div>
+                        </div>
+                    </div>
+                @elseif(! $is_done)
+                    {{-- Choose a Look Screen --}}
+                    <div class="py-4 space-y-8 flex flex-col items-center">
+                        <div class="text-center">
+                            <h2 class="text-3xl font-extrabold text-base-content tracking-tight">Choose a Look</h2>
+                            <p class="text-slate-500 text-sm mt-1 max-w-md">Select your favorite look variation from the options generated below.</p>
+                        </div>
+
+                        {{-- Look Variations Grid --}}
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl w-full">
+                            @foreach($generated_variations as $index => $url)
+                                <button type="button" 
+                                        wire:click="$set('selected_variation_index', {{ $index }})" 
+                                        class="relative bg-base-100 border rounded-3xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 group focus:outline-none {{ $selected_variation_index === $index ? 'border-primary ring-4 ring-primary/20 scale-[1.02]' : 'border-base-300 opacity-80 hover:opacity-100' }}">
+                                    <div class="h-96 w-full relative overflow-hidden">
+                                        <img src="{{ $url }}" class="h-full w-full object-cover" />
+                                        <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent p-4 flex justify-between items-center">
+                                            <span class="text-xs font-bold text-white uppercase tracking-wider">Option {{ $index + 1 }}</span>
+                                            @if($selected_variation_index === $index)
+                                                <span class="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white border border-white">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                                                    </svg>
+                                                </span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </button>
+                            @endforeach
+                        </div>
+
+                        {{-- Actions --}}
+                        <div class="flex flex-col sm:flex-row gap-3 w-full max-w-sm pt-4">
+                            <button type="button" wire:click="previousStep" class="flex-1 btn btn-outline border-base-300 font-bold rounded-xl btn-ghost">
+                                ← Re-configure
+                            </button>
+                            <button type="button" wire:click="finishGeneration" class="flex-1 btn btn-primary font-bold shadow-md shadow-primary/10 rounded-xl">
+                                Save & Finish →
+                            </button>
                         </div>
                     </div>
                 @else
@@ -641,7 +666,7 @@
                             <a href="/" class="flex-1 btn btn-primary font-bold shadow-md shadow-primary/10 rounded-xl">
                                 Go to Dashboard
                             </a>
-                            <button type="button" wire:click="$set('step', 1); $set('is_done', false); $set('name', ''); $set('age', ''); $set('niches', []); $set('face_reference', null); $set('style_reference', null); $set('backstory', ''); $set('personality', 50); $set('ethnicity', ''); $set('skin_tone', ''); $set('hair_color', ''); $set('hair_length', ''); $set('hair_texture', ''); $set('eye_color', ''); $set('build', ''); $set('custom_description', ''); $set('aesthetic_vibe', '');" class="flex-1 btn btn-outline border-base-300 font-bold rounded-xl btn-ghost">
+                            <button type="button" wire:click="$set('step', 1); $set('is_done', false); $set('name', ''); $set('age', ''); $set('niches', []); $set('face_reference', null); $set('style_reference', null); $set('backstory', ''); $set('personality', 50); $set('ethnicity', 'White'); $set('skin_tone', 'Fair'); $set('hair_color', 'Blonde'); $set('hair_length', 'Long'); $set('hair_texture', 'Straight'); $set('eye_color', 'Blue'); $set('build', 'Petite'); $set('custom_description', ''); $set('aesthetic_vibe', '');" class="flex-1 btn btn-outline border-base-300 font-bold rounded-xl btn-ghost">
                                 Create Another
                             </button>
                         </div>

@@ -32,6 +32,7 @@ class User extends Authenticatable implements HasPasskeys
         'email',
         'password',
         'avatar',
+        'credits',
     ];
 
     /**
@@ -54,6 +55,7 @@ class User extends Authenticatable implements HasPasskeys
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'credits' => 'decimal:2',
         ];
     }
 
@@ -128,5 +130,22 @@ class User extends Authenticatable implements HasPasskeys
         }
 
         return false;
+    }
+
+    /**
+     * Transfer credits from the user's personal balance to a team's balance.
+     */
+    public function transferCreditsToTeam(Team $team, float $amount): void
+    {
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException('Transfer amount must be greater than zero.');
+        }
+
+        if ((float) $this->credits < $amount) {
+            throw new \Exception('Insufficient personal credits.');
+        }
+
+        $this->decrement('credits', $amount);
+        $team->increment('credits', $amount);
     }
 }

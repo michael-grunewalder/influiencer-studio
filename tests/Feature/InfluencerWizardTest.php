@@ -2,7 +2,9 @@
 
 use App\Livewire\InfluencerWizard;
 use App\Models\Influencer;
+use App\Models\Team;
 use App\Models\User;
+use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
 test('influencer wizard page can be accessed by authenticated users', function () {
@@ -32,8 +34,25 @@ test('influencer wizard validates basic information on step 1', function () {
         ->assertSet('step', 1);
 });
 
-test('influencer wizard can progress and create an influencer', function () {
+test('influencer wizard can progress and create an influencer with credit system', function () {
     $user = User::factory()->create();
+    $team = Team::create([
+        'name' => 'Test Team',
+        'credits' => 10.00,
+    ]);
+    $user->teams()->attach($team);
+
+    // Mock global API key in config
+    config(['services.fal.key' => 'mock-global-key']);
+
+    // Mock Fal.ai image generation API
+    Http::fake([
+        'https://fal.run/*' => Http::response([
+            'images' => [
+                ['url' => 'https://v3.fal.media/files/mock-image.png'],
+            ],
+        ], 200),
+    ]);
 
     $test = Livewire::actingAs($user)
         ->test(InfluencerWizard::class)
@@ -45,7 +64,7 @@ test('influencer wizard can progress and create an influencer', function () {
         ->call('nextStep')
         ->assertHasNoErrors()
         ->assertSet('step', 2)
-        // Step 2 (skip optional files)
+        // Step 2
         ->call('nextStep')
         ->assertHasNoErrors()
         ->assertSet('step', 3)
@@ -69,14 +88,28 @@ test('influencer wizard can progress and create an influencer', function () {
         ->assertSet('step', 5)
         ->assertSet('is_generating', true);
 
-    // Call finishGeneration to simulate final step completion
-    $test->call('finishGeneration')
-        ->assertSet('is_done', true)
-        ->assertSet('is_generating', false);
+    // Call generate to call Fal.ai API
+    $test->call('generate')
+        ->assertSet('is_generating', false)
+        ->assertSet('generated_variations', [
+            'https://v3.fal.media/files/mock-image.png',
+            'https://v3.fal.media/files/mock-image.png',
+            'https://v3.fal.media/files/mock-image.png',
+        ]);
 
-    // Assert database has the influencer
+    // Check that credits were charged (3 images * $0.35 = $1.05 deducted from $10.00 = $8.95)
+    $team->refresh();
+    expect((float) $team->credits)->toBe(8.95);
+
+    // Set selection index to 1
+    $test->set('selected_variation_index', 1)
+        ->call('finishGeneration')
+        ->assertSet('is_done', true);
+
+    // Assert database has the influencer with mock avatar
     $this->assertDatabaseHas('influencers', [
         'name' => 'Elena Sterling',
+        'avatar' => 'https://v3.fal.media/files/mock-image.png',
     ]);
 
     $influencer = Influencer::where('name', 'Elena Sterling')->first();
