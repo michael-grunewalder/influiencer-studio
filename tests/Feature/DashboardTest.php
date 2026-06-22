@@ -5,6 +5,7 @@ use App\Livewire\Dashboard;
 use App\Models\Influencer;
 use App\Models\Team;
 use App\Models\User;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
 test('dashboard is accessible by authenticated users and displays influencers', function () {
@@ -90,7 +91,18 @@ test('user can generate and download sheet images', function () {
         ->assertHasNoErrors();
 
     $influencer->refresh();
-    expect($influencer->properties->character_sheet)->not->toBeNull();
+    $sheetUrl = $influencer->properties->character_sheet;
+    expect($sheetUrl)->toContain('/storage/teams/')->toContain('/references/character_sheet_')->toContain('signature=');
+
+    $parsedPath = parse_url($sheetUrl, PHP_URL_PATH);
+    $path = str_replace('/storage/', '', $parsedPath);
+    expect(Storage::disk('local')->exists($path))->toBeTrue();
+
+    $this->assertDatabaseHas('team_assets', [
+        'team_id' => $team->id,
+        'local_url' => $parsedPath,
+        'purpose' => 'character_sheet',
+    ]);
 });
 
 test('user can delete an influencer on dashboard', function () {

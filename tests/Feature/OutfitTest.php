@@ -5,6 +5,7 @@ use App\Livewire\Dashboard;
 use App\Models\Influencer;
 use App\Models\Outfit;
 use App\Models\User;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
 test('outfits can be generated for an influencer on dashboard', function () {
@@ -29,12 +30,16 @@ test('outfits can be generated for an influencer on dashboard', function () {
         ->call('generateOutfit')
         ->assertHasNoErrors();
 
-    $this->assertDatabaseHas('outfits', [
-        'influencer_id' => $influencer->id,
-        'top' => 'Silk Blouse',
-        'bottom' => 'Pleated Skirt',
-        'hairstyle' => 'High Bun',
-        'full_look_description' => 'A classy evening look.',
+    $outfit = Outfit::where('influencer_id', $influencer->id)->first();
+    expect($outfit->image_path)->toContain('/storage/teams/')->toContain('/wardrobes/outfit_')->toContain('signature=');
+
+    $parsedPath = parse_url($outfit->image_path, PHP_URL_PATH);
+    $path = str_replace('/storage/', '', $parsedPath);
+    expect(Storage::disk('local')->exists($path))->toBeTrue();
+
+    $this->assertDatabaseHas('team_assets', [
+        'local_url' => $parsedPath,
+        'purpose' => 'outfit',
     ]);
 });
 
@@ -60,12 +65,16 @@ test('outfits can be manually named and saved', function () {
         ->call('saveNewOutfit')
         ->assertHasNoErrors();
 
-    $this->assertDatabaseHas('outfits', [
-        'influencer_id' => $influencer->id,
-        'name' => 'Street Vibe',
-        'top' => 'Leather Jacket',
-        'bottom' => 'Skinny Jeans',
-        'hairstyle' => 'Messy Waves',
+    $outfit = Outfit::where('name', 'Street Vibe')->first();
+    expect($outfit->image_path)->toContain('/storage/teams/')->toContain('/wardrobes/outfit_')->toContain('signature=');
+
+    $parsedPath = parse_url($outfit->image_path, PHP_URL_PATH);
+    $path = str_replace('/storage/', '', $parsedPath);
+    expect(Storage::disk('local')->exists($path))->toBeTrue();
+
+    $this->assertDatabaseHas('team_assets', [
+        'local_url' => $parsedPath,
+        'purpose' => 'outfit',
     ]);
 });
 

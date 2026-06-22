@@ -5,6 +5,7 @@ use App\Models\Influencer;
 use App\Models\Team;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
 test('influencer wizard page can be accessed by authenticated users', function () {
@@ -45,13 +46,14 @@ test('influencer wizard can progress and create an influencer with credit system
     // Mock global API key in config
     config(['services.fal.key' => 'mock-global-key', 'fal_api.key' => 'mock-global-key']);
 
-    // Mock Fal.ai image generation API
+    // Mock Fal.ai image generation API and remote image downloads
     Http::fake([
         'https://fal.run/*' => Http::response([
             'images' => [
                 ['url' => 'https://v3.fal.media/files/mock-image.png'],
             ],
         ], 200),
+        'https://v3.fal.media/*' => Http::response('fake binary content', 200, ['Content-Type' => 'image/png']),
     ]);
 
     $test = Livewire::actingAs($user)
@@ -108,10 +110,20 @@ test('influencer wizard can progress and create an influencer with credit system
         ->call('finishGeneration')
         ->assertSet('is_done', true);
 
-    // Assert database has the influencer with mock avatar
-    $this->assertDatabaseHas('influencers', [
-        'name' => 'Elena Sterling',
-        'avatar' => 'https://v3.fal.media/files/mock-image.png',
+    // Assert database has the influencer with local private avatar URL
+    $influencer = Influencer::where('name', 'Elena Sterling')->first();
+    expect($influencer->avatar)->toContain('/storage/teams/')->toContain('/avatar.png')->toContain('signature=');
+
+    $parsedPath = parse_url($influencer->avatar, PHP_URL_PATH);
+    $path = str_replace('/storage/', '', $parsedPath);
+    expect(Storage::disk('local')->exists($path))->toBeTrue();
+
+    // Assert database has team asset mapping
+    $this->assertDatabaseHas('team_assets', [
+        'team_id' => $team->id,
+        'local_url' => $parsedPath,
+        'remote_url' => 'https://v3.fal.media/files/mock-image.png',
+        'purpose' => 'avatar',
     ]);
 
     $influencer = Influencer::where('name', 'Elena Sterling')->first();

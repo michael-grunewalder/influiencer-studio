@@ -9,6 +9,7 @@ use App\Services\FalAiService;
 use App\Services\PromptBuilderService;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -451,19 +452,31 @@ class InfluencerWizard extends Component
             return;
         }
 
+        $team = $this->getActiveTeam() ?: Team::first() ?: Team::create(['name' => 'Default Team']);
+        $teamId = $team->id;
+        $influencerId = (string) Str::ulid();
+
         $facePath = null;
         if ($this->face_reference) {
-            $facePath = $this->face_reference->store('references', 'public');
+            $ext = $this->face_reference->getClientOriginalExtension();
+            $destPath = "teams/{$teamId}/influencers/{$influencerId}/references/face_reference_".time().".{$ext}";
+            $facePath = app(FalAiService::class)->downloadAndRegister($team, $this->face_reference->getRealPath(), 'face_reference', $destPath);
         }
 
         $stylePath = null;
         if ($this->style_reference) {
-            $stylePath = $this->style_reference->store('references', 'public');
+            $ext = $this->style_reference->getClientOriginalExtension();
+            $destPath = "teams/{$teamId}/influencers/{$influencerId}/references/style_reference_".time().".{$ext}";
+            $stylePath = app(FalAiService::class)->downloadAndRegister($team, $this->style_reference->getRealPath(), 'style_reference', $destPath);
         }
 
         $variation = $this->generated_variations[$this->selected_variation_index] ?? null;
         $selectedAvatar = ($variation && isset($variation['url'])) ? $variation['url'] : 'https://picsum.photos/720/1280';
-        $this->generated_avatar = $selectedAvatar;
+
+        $ext = pathinfo(parse_url($selectedAvatar, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'png';
+        $destPath = "teams/{$teamId}/influencers/{$influencerId}/avatar.{$ext}";
+        $localAvatarUrl = app(FalAiService::class)->downloadAndRegister($team, $selectedAvatar, 'avatar', $destPath);
+        $this->generated_avatar = $localAvatarUrl;
 
         $properties = new InfluencerProperties(
             gender: $this->gender,
@@ -482,17 +495,15 @@ class InfluencerWizard extends Component
             build: $this->build,
             custom_description: $this->custom_description ?: null,
             aesthetic_vibe: $this->aesthetic_vibe ?: null,
-            closeup: $selectedAvatar,
+            closeup: $localAvatarUrl,
         );
 
-        $team = $this->getActiveTeam();
-        $teamId = $team ? $team->id : null;
-
         $influencer = Influencer::create([
+            'id' => $influencerId,
             'team_id' => $teamId,
             'name' => $this->name,
             'stagename' => $this->name,
-            'avatar' => $selectedAvatar,
+            'avatar' => $localAvatarUrl,
             'bio' => $this->backstory ?: ($this->name.' is a digital influencer specialized in '.implode(', ', $this->niches).'.'),
             'properties' => $properties,
         ]);

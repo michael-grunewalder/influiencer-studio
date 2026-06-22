@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Models\Team;
+use App\Models\TeamAsset;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class FalAiService
 {
@@ -523,5 +525,72 @@ class FalAiService
         }
 
         return $results;
+    }
+
+    /**
+     * Download a remote asset (e.g. from fal.ai) and register it in the team_assets registry.
+     */
+    public function downloadAndRegister(Team $team, string $remoteUrl, string $purpose, string $destPath): string
+    {
+        try {
+            // If it is a local URL already (e.g. mock), copy it
+            if (! str_starts_with($remoteUrl, 'http')) {
+                $relativePath = str_replace('/storage/', 'storage/', $remoteUrl);
+                $srcPath = public_path($relativePath);
+                if (! file_exists($srcPath)) {
+                    $srcPath = storage_path(str_replace('/storage/', 'app/public/', $remoteUrl));
+                }
+
+                if (file_exists($srcPath)) {
+                    Storage::disk('local')->put($destPath, file_get_contents($srcPath));
+                    $localUrl = Storage::disk('local')->url($destPath);
+
+                    TeamAsset::create([
+                        'team_id' => $team->id,
+                        'local_url' => $localUrl,
+                        'remote_url' => $remoteUrl,
+                        'mime_type' => mime_content_type($srcPath) ?: 'image/png',
+                        'purpose' => $purpose,
+                    ]);
+
+                    return $localUrl;
+                }
+
+                return $remoteUrl;
+            }
+
+            // Remote URL: download
+            $response = Http::get($remoteUrl);
+            if ($response->successful()) {
+                $content = $response->body();
+                Storage::disk('local')->put($destPath, $content);
+                $localUrl = Storage::disk('local')->url($destPath);
+
+                $mimeType = $response->header('Content-Type') ?: 'image/png';
+
+                TeamAsset::create([
+                    'team_id' => $team->id,
+                    'local_url' => $localUrl,
+                    'remote_url' => $remoteUrl,
+                    'mime_type' => $mimeType,
+                    'purpose' => $purpose,
+                ]);
+
+                return $localUrl;
+            }
+
+            Log::error('FalAiService::downloadAndRegister: Failed downloading remote file', [
+                'url' => $remoteUrl,
+                'status' => $response->status(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('FalAiService::downloadAndRegister: Exception occurred while downloading and registering asset', [
+                'url' => $remoteUrl,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+
+        return $remoteUrl;
     }
 }

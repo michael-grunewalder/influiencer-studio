@@ -6,6 +6,7 @@ use App\Livewire\InfluencerWizard;
 use App\Models\Influencer;
 use App\Models\Team;
 use App\Models\User;
+use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
 test('a user can belong to multiple teams', function () {
@@ -87,6 +88,10 @@ test('dashboard filters influencers by active team selection', function () {
 });
 
 test('wizard correctly assigns newly generated influencer to active team', function () {
+    Http::fake([
+        '*' => Http::response('fake image binary content', 200, ['Content-Type' => 'image/png']),
+    ]);
+
     $user = User::factory()->create();
     $team = Team::create(['name' => 'Wizard Team']);
     $user->teams()->attach($team->id);

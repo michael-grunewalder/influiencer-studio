@@ -68,4 +68,9 @@ class Team extends Model
     {
         return $this->hasMany(Influencer::class);
     }
+
+    public function assets(): HasMany
+    {
+        return $this->hasMany(TeamAsset::class);
+    }
 }

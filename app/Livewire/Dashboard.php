@@ -6,7 +6,9 @@ use App\Data\InfluencerProperties;
 use App\Models\Influencer;
 use App\Models\Outfit;
 use App\Models\Team;
+use App\Services\FalAiService;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -284,11 +286,19 @@ class Dashboard extends Component
 
         $randomImage = collect($images)->random();
 
+        $team = Team::find($influencer->team_id) ?: Team::first() ?: Team::create(['name' => 'Default Team']);
+        $teamId = $team->id;
+        $ext = pathinfo($randomImage, PATHINFO_EXTENSION) ?: 'png';
+
         if ($field === 'avatar') {
-            $influencer->update(['avatar' => $randomImage]);
+            $destPath = "teams/{$teamId}/influencers/{$influencer->id}/avatar.{$ext}";
+            $localUrl = app(FalAiService::class)->downloadAndRegister($team, $randomImage, 'avatar', $destPath);
+            $influencer->update(['avatar' => $localUrl]);
         } else {
+            $destPath = "teams/{$teamId}/influencers/{$influencer->id}/references/{$field}_".time().".{$ext}";
+            $localUrl = app(FalAiService::class)->downloadAndRegister($team, $randomImage, $field, $destPath);
             $props = $influencer->properties ?? new InfluencerProperties;
-            $props->{$field} = $randomImage;
+            $props->{$field} = $localUrl;
             $influencer->update(['properties' => $props]);
         }
 
@@ -299,11 +309,13 @@ class Dashboard extends Component
     public function updatedUploadedAvatar(): void
     {
         $this->validate(['uploaded_avatar' => 'image|max:5120']);
-        $path = $this->uploaded_avatar->store('avatars', 'public');
-
         $influencer = $this->selectedInfluencer;
         if ($influencer) {
-            $influencer->update(['avatar' => '/storage/'.$path]);
+            $team = Team::find($influencer->team_id) ?: Team::first() ?: Team::create(['name' => 'Default Team']);
+            $ext = $this->uploaded_avatar->getClientOriginalExtension();
+            $destPath = "teams/{$team->id}/influencers/{$influencer->id}/avatar.{$ext}";
+            $localUrl = app(FalAiService::class)->downloadAndRegister($team, $this->uploaded_avatar->getRealPath(), 'avatar', $destPath);
+            $influencer->update(['avatar' => $localUrl]);
             Toaster::success(__('Avatar erfolgreich ersetzt!'));
         }
     }
@@ -311,22 +323,40 @@ class Dashboard extends Component
     public function updatedUploadedCharacterSheet(): void
     {
         $this->validate(['uploaded_character_sheet' => 'image|max:5120']);
-        $path = $this->uploaded_character_sheet->store('sheets', 'public');
-        $this->updatePropertyImage('character_sheet', '/storage/'.$path);
+        $influencer = $this->selectedInfluencer;
+        if ($influencer) {
+            $team = Team::find($influencer->team_id) ?: Team::first() ?: Team::create(['name' => 'Default Team']);
+            $ext = $this->uploaded_character_sheet->getClientOriginalExtension();
+            $destPath = "teams/{$team->id}/influencers/{$influencer->id}/references/character_sheet_".time().".{$ext}";
+            $localUrl = app(FalAiService::class)->downloadAndRegister($team, $this->uploaded_character_sheet->getRealPath(), 'character_sheet', $destPath);
+            $this->updatePropertyImage('character_sheet', $localUrl);
+        }
     }
 
     public function updatedUploadedCloseup(): void
     {
         $this->validate(['uploaded_closeup' => 'image|max:5120']);
-        $path = $this->uploaded_closeup->store('sheets', 'public');
-        $this->updatePropertyImage('closeup', '/storage/'.$path);
+        $influencer = $this->selectedInfluencer;
+        if ($influencer) {
+            $team = Team::find($influencer->team_id) ?: Team::first() ?: Team::create(['name' => 'Default Team']);
+            $ext = $this->uploaded_closeup->getClientOriginalExtension();
+            $destPath = "teams/{$team->id}/influencers/{$influencer->id}/references/closeup_".time().".{$ext}";
+            $localUrl = app(FalAiService::class)->downloadAndRegister($team, $this->uploaded_closeup->getRealPath(), 'closeup', $destPath);
+            $this->updatePropertyImage('closeup', $localUrl);
+        }
     }
 
     public function updatedUploadedDetailSheet(): void
     {
         $this->validate(['uploaded_detail_sheet' => 'image|max:5120']);
-        $path = $this->uploaded_detail_sheet->store('sheets', 'public');
-        $this->updatePropertyImage('detail_sheet', '/storage/'.$path);
+        $influencer = $this->selectedInfluencer;
+        if ($influencer) {
+            $team = Team::find($influencer->team_id) ?: Team::first() ?: Team::create(['name' => 'Default Team']);
+            $ext = $this->uploaded_detail_sheet->getClientOriginalExtension();
+            $destPath = "teams/{$team->id}/influencers/{$influencer->id}/references/detail_sheet_".time().".{$ext}";
+            $localUrl = app(FalAiService::class)->downloadAndRegister($team, $this->uploaded_detail_sheet->getRealPath(), 'detail_sheet', $destPath);
+            $this->updatePropertyImage('detail_sheet', $localUrl);
+        }
     }
 
     private function updatePropertyImage(string $field, string $url): void
@@ -355,6 +385,14 @@ class Dashboard extends Component
             Toaster::error(__('Keine Bilddatei vorhanden.'));
 
             return;
+        }
+
+        // Check if the URL belongs to private local disk
+        if (str_starts_with($url, '/storage/')) {
+            $pathAfterStorage = substr($url, strlen('/storage/'));
+            if (Storage::disk('local')->exists($pathAfterStorage)) {
+                return response()->download(Storage::disk('local')->path($pathAfterStorage));
+            }
         }
 
         // Map URL back to path
@@ -481,6 +519,7 @@ class Dashboard extends Component
         ]);
 
         $image = $this->getRandomOutfitImage();
+        $localUrl = $this->storeOutfitImage($influencer, $image);
 
         $influencer->outfits()->create([
             'name' => 'Outfit #'.($influencer->outfits()->count() + 1),
@@ -488,7 +527,7 @@ class Dashboard extends Component
             'bottom' => $this->outfit_bottom,
             'hairstyle' => $this->outfit_hairstyle,
             'full_look_description' => $this->outfit_description,
-            'image_path' => $image,
+            'image_path' => $localUrl,
         ]);
 
         Toaster::success(__('Outfit erfolgreich generiert und zur Garderobe hinzugefügt!'));
@@ -521,6 +560,7 @@ class Dashboard extends Component
         ]);
 
         $image = $this->getRandomOutfitImage();
+        $localUrl = $this->storeOutfitImage($influencer, $image);
 
         $influencer->outfits()->create([
             'name' => $this->newOutfitName,
@@ -528,13 +568,22 @@ class Dashboard extends Component
             'bottom' => $this->outfit_bottom,
             'hairstyle' => $this->outfit_hairstyle,
             'full_look_description' => $this->outfit_description,
-            'image_path' => $image,
+            'image_path' => $localUrl,
         ]);
 
         $this->showAddOutfitModal = false;
         $this->newOutfitName = '';
 
         Toaster::success(__('Outfit erfolgreich gespeichert!'));
+    }
+
+    private function storeOutfitImage(Influencer $influencer, string $sourceImage): string
+    {
+        $team = Team::find($influencer->team_id) ?: Team::first() ?: Team::create(['name' => 'Default Team']);
+        $ext = pathinfo($sourceImage, PATHINFO_EXTENSION) ?: 'png';
+        $destPath = "teams/{$team->id}/influencers/{$influencer->id}/wardrobes/outfit_".time().'_'.rand(1000, 9999).".{$ext}";
+
+        return app(FalAiService::class)->downloadAndRegister($team, $sourceImage, 'outfit', $destPath);
     }
 
     public function selectOutfit(string $id): void

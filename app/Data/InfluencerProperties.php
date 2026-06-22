@@ -4,6 +4,7 @@ namespace App\Data;
 
 use Illuminate\Contracts\Database\Eloquent\Castable;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
+use Illuminate\Support\Facades\Storage;
 
 class InfluencerProperties implements Castable
 {
@@ -41,6 +42,40 @@ class InfluencerProperties implements Castable
     {
         return new class implements CastsAttributes
         {
+            protected function resolvePrivateUrl(?string $url): ?string
+            {
+                if (! $url) {
+                    return null;
+                }
+
+                if (str_starts_with($url, '/storage/teams/')) {
+                    $path = substr($url, strlen('/storage/'));
+                    try {
+                        return Storage::disk('local')->temporaryUrl($path, now()->addDay());
+                    } catch (\Throwable $e) {
+                        return $url;
+                    }
+                }
+
+                return $url;
+            }
+
+            protected function stripSignature(?string $url): ?string
+            {
+                if (! $url) {
+                    return null;
+                }
+
+                $pos = strpos($url, '/storage/teams/');
+                if ($pos !== false) {
+                    $clean = substr($url, $pos);
+
+                    return explode('?', $clean)[0];
+                }
+
+                return $url;
+            }
+
             public function get($model, string $key, $value, array $attributes): ?InfluencerProperties
             {
                 if (! $value) {
@@ -58,8 +93,8 @@ class InfluencerProperties implements Castable
                     niche: $data['niche'] ?? [],
                     backstory: $data['backstory'] ?? null,
                     personality: isset($data['personality']) ? (int) $data['personality'] : 50,
-                    face_reference: $data['face_reference'] ?? null,
-                    style_reference: $data['style_reference'] ?? null,
+                    face_reference: $this->resolvePrivateUrl($data['face_reference'] ?? null),
+                    style_reference: $this->resolvePrivateUrl($data['style_reference'] ?? null),
                     ethnicity: $data['ethnicity'] ?? null,
                     skin_tone: $data['skin_tone'] ?? null,
                     hair_color: $data['hair_color'] ?? null,
@@ -69,9 +104,9 @@ class InfluencerProperties implements Castable
                     build: $data['build'] ?? null,
                     custom_description: $data['custom_description'] ?? null,
                     aesthetic_vibe: $data['aesthetic_vibe'] ?? null,
-                    character_sheet: $data['character_sheet'] ?? null,
-                    closeup: $data['closeup'] ?? null,
-                    detail_sheet: $data['detail_sheet'] ?? null,
+                    character_sheet: $this->resolvePrivateUrl($data['character_sheet'] ?? null),
+                    closeup: $this->resolvePrivateUrl($data['closeup'] ?? null),
+                    detail_sheet: $this->resolvePrivateUrl($data['detail_sheet'] ?? null),
                     location: $data['location'] ?? null,
                     target_audience: $data['target_audience'] ?? null,
                     physical_description: $data['physical_description'] ?? null,
@@ -90,8 +125,8 @@ class InfluencerProperties implements Castable
                     'niche' => $value->niche,
                     'backstory' => $value->backstory,
                     'personality' => $value->personality,
-                    'face_reference' => $value->face_reference,
-                    'style_reference' => $value->style_reference,
+                    'face_reference' => $this->stripSignature($value->face_reference),
+                    'style_reference' => $this->stripSignature($value->style_reference),
                     'ethnicity' => $value->ethnicity,
                     'skin_tone' => $value->skin_tone,
                     'hair_color' => $value->hair_color,
@@ -101,9 +136,9 @@ class InfluencerProperties implements Castable
                     'build' => $value->build,
                     'custom_description' => $value->custom_description,
                     'aesthetic_vibe' => $value->aesthetic_vibe,
-                    'character_sheet' => $value->character_sheet,
-                    'closeup' => $value->closeup,
-                    'detail_sheet' => $value->detail_sheet,
+                    'character_sheet' => $this->stripSignature($value->character_sheet),
+                    'closeup' => $this->stripSignature($value->closeup),
+                    'detail_sheet' => $this->stripSignature($value->detail_sheet),
                     'location' => $value->location,
                     'target_audience' => $value->target_audience,
                     'physical_description' => $value->physical_description,
