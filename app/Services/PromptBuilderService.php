@@ -671,7 +671,7 @@ Constraints: no people in the background. No visible brand logos on any item. {$
             $ctx = "Character background: {$slicedBackstory}. Let this inform their physique, presence, and energy — e.g. a personal trainer should look visibly athletic and fit, a gamer may look relaxed and casual, a CEO projects confidence. ";
         }
 
-        return "Professional full-body character turnaround sheet. Pure white background, no background elements whatsoever. Soft neutral studio lighting, perfectly flat and even across all four panels — no shadows, no color cast, no vignette.
+        return "Professional full-body character turnaround sheet. Pure white background, no background elements whatsoever. Soft neutral studio lighting, perfectly flat and even across all four panels — no shadows, no color cast, no vignette. Neutral facial expression, neutral pose.
 
 {$phys}{$style}{$ctx}
 

@@ -7,7 +7,9 @@ use App\Models\Influencer;
 use App\Models\Outfit;
 use App\Models\Team;
 use App\Services\FalAiService;
+use App\Services\PromptBuilderService;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -22,6 +24,8 @@ class Dashboard extends Component
     public ?string $selectedId = null;
 
     public ?string $selectedTeamId = null;
+
+    public array $generationStates = [];
 
     public string $currentTab = 'profile'; // profile, photos, videos
 
@@ -267,42 +271,104 @@ class Dashboard extends Component
             return;
         }
 
-        // Get all files in public/storage/influencer
-        $images = [];
-        $dir = public_path('storage/influencer');
-        if (File::isDirectory($dir)) {
-            $files = File::files($dir);
-            foreach ($files as $file) {
-                $images[] = '/storage/influencer/'.$file->getFilename();
-            }
-        }
-
-        if (empty($images)) {
-            for ($i = 1; $i <= 46; $i++) {
-                $ext = in_array($i, [3, 4, 6]) ? 'jpg' : 'png';
-                $images[] = "/storage/influencer/i{$i}.{$ext}";
-            }
-        }
-
-        $randomImage = collect($images)->random();
-
         $team = Team::find($influencer->team_id) ?: Team::first() ?: Team::create(['name' => 'Default Team']);
-        $teamId = $team->id;
-        $ext = pathinfo($randomImage, PATHINFO_EXTENSION) ?: 'png';
 
-        if ($field === 'avatar') {
-            $destPath = "teams/{$teamId}/influencers/{$influencer->id}/avatar.{$ext}";
-            $localUrl = app(FalAiService::class)->downloadAndRegister($team, $randomImage, 'avatar', $destPath);
-            $influencer->update(['avatar' => $localUrl]);
-        } else {
-            $destPath = "teams/{$teamId}/influencers/{$influencer->id}/references/{$field}_".time().".{$ext}";
-            $localUrl = app(FalAiService::class)->downloadAndRegister($team, $randomImage, $field, $destPath);
-            $props = $influencer->properties ?? new InfluencerProperties;
-            $props->{$field} = $localUrl;
-            $influencer->update(['properties' => $props]);
+        // Set generation state to generating
+        $this->generationStates[$field] = ['status' => 'generating', 'error' => null];
+
+        try {
+            // Build prompt
+            if ($field === 'character_sheet') {
+                $prompt = PromptBuilderService::buildInfluencerSheetPrompt($influencer);
+            } else {
+                $prompt = 'Professional turnaround sheet of the character.';
+            }
+
+            // Resolve avatar as reference image
+            $uploadedUrl = null;
+            if ($influencer->avatar) {
+                $avatarUrl = $influencer->avatar;
+                if (str_starts_with($avatarUrl, 'http') && ! str_contains($avatarUrl, '/storage/teams/')) {
+                    $uploadedUrl = $avatarUrl;
+                } else {
+                    $parsedPath = parse_url($avatarUrl, PHP_URL_PATH);
+                    $cleanPath = str_replace('/storage/', '', $parsedPath);
+                    $fullPath = Storage::disk('local')->path($cleanPath);
+                    if (file_exists($fullPath)) {
+                        $uploadedUrl = app(FalAiService::class)->uploadFile($team, $fullPath, mime_content_type($fullPath) ?: 'image/png');
+                    }
+                }
+            }
+
+            // Resolve Ideogram model config
+            $modelKey = 'ideogram';
+            $modelConfig = config("image_models.models.{$modelKey}");
+            if (! $modelConfig) {
+                throw new \Exception('Model configuration for Ideogram not found.');
+            }
+
+            $selectedModel = $uploadedUrl ? $modelConfig['model_edit'] : $modelConfig['model'];
+            $width = $modelConfig['default_size']['width'] ?? 768;
+            $height = $modelConfig['default_size']['height'] ?? 1024;
+
+            if ($field === 'character_sheet') {
+                $width = 1280;
+                $height = 720;
+            }
+
+            $payload = [
+                'prompt' => $prompt,
+                'image_size' => [
+                    'width' => $width,
+                    'height' => $height,
+                ],
+            ];
+
+            if ($uploadedUrl) {
+                $payload['image_url'] = $uploadedUrl;
+            }
+
+            // Call FAL.AI
+            $results = app(FalAiService::class)->generateParallelPayloads($team, [$payload], $selectedModel);
+            $res = $results[0] ?? null;
+
+            if ($res && $res['status'] === 'success') {
+                $remoteUrl = $res['images'][0]['url'] ?? null;
+                if (! $remoteUrl) {
+                    throw new \Exception('No image URL returned from FAL.AI.');
+                }
+
+                $ext = pathinfo(parse_url($remoteUrl, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'png';
+                if ($field === 'avatar') {
+                    $destPath = "teams/{$team->id}/influencers/{$influencer->id}/avatar.{$ext}";
+                    $localUrl = app(FalAiService::class)->downloadAndRegister($team, $remoteUrl, 'avatar', $destPath);
+                    $influencer->update(['avatar' => $localUrl]);
+                } else {
+                    $destPath = "teams/{$team->id}/influencers/{$influencer->id}/references/{$field}_".time().".{$ext}";
+                    $localUrl = app(FalAiService::class)->downloadAndRegister($team, $remoteUrl, $field, $destPath);
+                    $props = $influencer->properties ?? new InfluencerProperties;
+                    $props->{$field} = $localUrl;
+                    $influencer->update(['properties' => $props]);
+                }
+
+                $influencer->refresh();
+
+                // Clear generation state on success
+                unset($this->generationStates[$field]);
+                Toaster::success(__(':field erfolgreich generiert!', ['field' => ucfirst(str_replace('_', ' ', $field))]));
+            } else {
+                $errorMsg = $res['error'] ?? 'Unknown generation error';
+                $this->generationStates[$field] = ['status' => 'failed', 'error' => $errorMsg];
+                Toaster::error(__('Fehler bei der Generierung: :error', ['error' => $errorMsg]));
+            }
+        } catch (\Throwable $e) {
+            Log::error("Dashboard::generateImage error: {$e->getMessage()}", [
+                'field' => $field,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            $this->generationStates[$field] = ['status' => 'failed', 'error' => $e->getMessage()];
+            Toaster::error(__('Ausnahme aufgetreten: :error', ['error' => $e->getMessage()]));
         }
-
-        Toaster::success(__(':field erfolgreich generiert!', ['field' => ucfirst(str_replace('_', ' ', $field))]));
     }
 
     // Handles files livewire uploads
@@ -366,6 +432,7 @@ class Dashboard extends Component
             $props = $influencer->properties ?? new InfluencerProperties;
             $props->{$field} = $url;
             $influencer->update(['properties' => $props]);
+            $influencer->refresh();
             Toaster::success(__(ucfirst(str_replace('_', ' ', $field)).' erfolgreich ersetzt!'));
         }
     }

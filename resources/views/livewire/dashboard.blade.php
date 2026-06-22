@@ -154,25 +154,136 @@
                         <div class="flex flex-col">
                             <span class="block text-[10px] font-extrabold text-slate-500 tracking-wider mb-2.5 uppercase">Image</span>
                             <div class="bg-base-100 border border-base-300 rounded-3xl overflow-hidden aspect-[4/5] relative group shadow-sm flex items-center justify-center">
-                                <img src="{{ $this->selectedInfluencer->avatar }}" class="w-full h-full object-cover" />
-                                <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                                    <div class="flex gap-1.5 justify-center">
-                                        <button type="button" wire:click="generateImage('avatar')" class="btn btn-xs btn-ghost text-white border border-white/20">Regenerate</button>
-                                        <label class="btn btn-xs btn-ghost text-white border border-white/20 cursor-pointer">
-                                            Replace
-                                            <input type="file" wire:model="uploaded_avatar" class="hidden" accept="image/*" />
-                                        </label>
-                                        <button type="button" wire:click="downloadImage('avatar')" class="btn btn-xs btn-ghost text-white border border-white/20">Download</button>
+                                @if(($generationStates['avatar']['status'] ?? '') === 'generating')
+                                    {{-- Generating / Loading State --}}
+                                    <div class="absolute inset-0 bg-base-100/80 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center space-y-3 select-none">
+                                        <div class="relative w-12 h-12 flex items-center justify-center">
+                                            <div class="absolute inset-0 rounded-full border-4 border-primary/20"></div>
+                                            <div class="absolute inset-0 rounded-full border-4 border-t-primary animate-spin"></div>
+                                        </div>
+                                        <div>
+                                            <span class="text-xs font-bold tracking-wider text-slate-500 uppercase animate-pulse">Generating...</span>
+                                        </div>
                                     </div>
-                                </div>
+                                @elseif(($generationStates['avatar']['status'] ?? '') === 'failed')
+                                    {{-- Failed State --}}
+                                    <div class="absolute inset-0 bg-error/5 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center space-y-3">
+                                        <div class="w-10 h-10 rounded-full bg-error/10 border border-error/20 flex items-center justify-center text-error shadow-sm">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-xs font-bold text-base-content">Generation failed</h4>
+                                            @if(isset($generationStates['avatar']['error']))
+                                                <p class="text-[9px] text-slate-500 mt-1 line-clamp-2 max-w-[160px]" title="{{ $generationStates['avatar']['error'] }}">
+                                                    {{ str_contains(strtolower($generationStates['avatar']['error']), 'content filter') ? 'Blocked by content safety filter.' : $generationStates['avatar']['error'] }}
+                                                </p>
+                                            @endif
+                                        </div>
+                                        <button type="button" wire:click="generateImage('avatar')" class="btn btn-xs btn-error text-white font-bold px-3 py-1 rounded-lg flex items-center gap-1 shadow-sm">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H17"/>
+                                            </svg>
+                                            Try Again
+                                        </button>
+                                    </div>
+                                @else
+                                    {{-- Active Loader for instant browser feedback --}}
+                                    <div wire:loading wire:target="generateImage('avatar')" class="absolute inset-0 bg-base-100/80 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center space-y-3 select-none z-20">
+                                        <div class="relative w-12 h-12 flex items-center justify-center">
+                                            <div class="absolute inset-0 rounded-full border-4 border-primary/20"></div>
+                                            <div class="absolute inset-0 rounded-full border-4 border-t-primary animate-spin"></div>
+                                        </div>
+                                        <div>
+                                            <span class="text-xs font-bold tracking-wider text-slate-500 uppercase animate-pulse">Generating...</span>
+                                        </div>
+                                    </div>
+
+                                    @if($this->selectedInfluencer->avatar)
+                                        <img src="{{ $this->selectedInfluencer->avatar }}" class="w-full h-full object-cover" />
+                                        <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+                                            <div class="flex gap-1.5 justify-center">
+                                                <button type="button" wire:click="generateImage('avatar')" class="btn btn-xs btn-ghost text-white border border-white/20">Regenerate</button>
+                                                <label class="btn btn-xs btn-ghost text-white border border-white/20 cursor-pointer">
+                                                    Replace
+                                                    <input type="file" wire:model="uploaded_avatar" class="hidden" accept="image/*" />
+                                                </label>
+                                                <button type="button" wire:click="downloadImage('avatar')" class="btn btn-xs btn-ghost text-white border border-white/20">Download</button>
+                                            </div>
+                                        </div>
+                                    @else
+                                        <div class="p-6 text-center space-y-4">
+                                            <div class="w-12 h-12 rounded-full border border-dashed border-base-350 flex items-center justify-center mx-auto text-slate-400 shadow-inner">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                                </svg>
+                                            </div>
+                                            <div class="flex flex-col sm:flex-row gap-2 justify-center">
+                                                <button type="button" wire:click="generateImage('avatar')" class="btn btn-sm btn-primary shadow shadow-primary/20">
+                                                    Generate
+                                                </button>
+                                                <label class="btn btn-sm btn-outline cursor-pointer">
+                                                    Upload
+                                                    <input type="file" wire:model="uploaded_avatar" class="hidden" accept="image/*" />
+                                                </label>
+                                            </div>
+                                        </div>
+                                    @endif
+                                @endif
                             </div>
                         </div>
 
                         {{-- CHARACTER SHEET --}}
                         <div class="flex flex-col">
                             <span class="block text-[10px] font-extrabold text-slate-500 tracking-wider mb-2.5 uppercase">Character Sheet</span>
-                            <div class="bg-base-100 border border-base-300 rounded-3xl overflow-hidden aspect-[4/5] relative group shadow-sm flex items-center justify-center">
-                                @if($this->selectedInfluencer->properties->character_sheet)
+                            <div class="bg-base-100 border border-base-300 rounded-3xl overflow-hidden aspect-[16/9] relative group shadow-sm flex items-center justify-center">
+                                {{-- Active Loader for instant browser feedback --}}
+                                <div wire:loading wire:target="generateImage('character_sheet')" class="absolute inset-0 bg-base-100/80 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center space-y-3 select-none z-20">
+                                    <div class="relative w-12 h-12 flex items-center justify-center">
+                                        <div class="absolute inset-0 rounded-full border-4 border-primary/20"></div>
+                                        <div class="absolute inset-0 rounded-full border-4 border-t-primary animate-spin"></div>
+                                    </div>
+                                    <div>
+                                        <span class="text-xs font-bold tracking-wider text-slate-500 uppercase animate-pulse">Generating...</span>
+                                    </div>
+                                </div>
+
+                                @if(($generationStates['character_sheet']['status'] ?? '') === 'generating')
+                                    {{-- Generating / Loading State --}}
+                                    <div class="absolute inset-0 bg-base-100/80 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center space-y-3 select-none">
+                                        <div class="relative w-12 h-12 flex items-center justify-center">
+                                            <div class="absolute inset-0 rounded-full border-4 border-primary/20"></div>
+                                            <div class="absolute inset-0 rounded-full border-4 border-t-primary animate-spin"></div>
+                                        </div>
+                                        <div>
+                                            <span class="text-xs font-bold tracking-wider text-slate-500 uppercase animate-pulse">Generating...</span>
+                                        </div>
+                                    </div>
+                                @elseif(($generationStates['character_sheet']['status'] ?? '') === 'failed')
+                                    {{-- Failed State --}}
+                                    <div class="absolute inset-0 bg-error/5 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center space-y-3">
+                                        <div class="w-10 h-10 rounded-full bg-error/10 border border-error/20 flex items-center justify-center text-error shadow-sm">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-xs font-bold text-base-content">Generation failed</h4>
+                                            @if(isset($generationStates['character_sheet']['error']))
+                                                <p class="text-[9px] text-slate-500 mt-1 line-clamp-2 max-w-[160px]" title="{{ $generationStates['character_sheet']['error'] }}">
+                                                    {{ str_contains(strtolower($generationStates['character_sheet']['error']), 'content filter') ? 'Blocked by content safety filter.' : $generationStates['character_sheet']['error'] }}
+                                                </p>
+                                            @endif
+                                        </div>
+                                        <button type="button" wire:click="generateImage('character_sheet')" class="btn btn-xs btn-error text-white font-bold px-3 py-1 rounded-lg flex items-center gap-1 shadow-sm">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H17"/>
+                                            </svg>
+                                            Try Again
+                                        </button>
+                                    </div>
+                                @elseif($this->selectedInfluencer->properties->character_sheet)
                                     <img src="{{ $this->selectedInfluencer->properties->character_sheet }}" class="w-full h-full object-cover" />
                                     <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
                                         <div class="flex gap-1.5 justify-center">
@@ -212,7 +323,49 @@
                             {{-- Closeup --}}
                             <div class="flex-1 flex flex-col min-h-0">
                                 <div class="bg-base-100 border border-base-300 rounded-3xl overflow-hidden flex-1 min-h-[160px] relative group shadow-sm flex items-center justify-center">
-                                    @if($this->selectedInfluencer->properties->closeup)
+                                    {{-- Active Loader for instant browser feedback --}}
+                                    <div wire:loading wire:target="generateImage('closeup')" class="absolute inset-0 bg-base-100/80 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center space-y-3 select-none z-20">
+                                        <div class="relative w-10 h-10 flex items-center justify-center">
+                                            <div class="absolute inset-0 rounded-full border-4 border-primary/20"></div>
+                                            <div class="absolute inset-0 rounded-full border-4 border-t-primary animate-spin"></div>
+                                        </div>
+                                        <div>
+                                            <span class="text-xs font-bold tracking-wider text-slate-500 uppercase animate-pulse">Generating...</span>
+                                        </div>
+                                    </div>
+
+                                    @if(($generationStates['closeup']['status'] ?? '') === 'generating')
+                                        {{-- Generating / Loading State --}}
+                                        <div class="absolute inset-0 bg-base-100/80 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center space-y-3 select-none">
+                                            <div class="relative w-10 h-10 flex items-center justify-center">
+                                                <div class="absolute inset-0 rounded-full border-4 border-primary/20"></div>
+                                                <div class="absolute inset-0 rounded-full border-4 border-t-primary animate-spin"></div>
+                                            </div>
+                                            <div>
+                                                <span class="text-xs font-bold tracking-wider text-slate-500 uppercase animate-pulse">Generating...</span>
+                                            </div>
+                                        </div>
+                                    @elseif(($generationStates['closeup']['status'] ?? '') === 'failed')
+                                        {{-- Failed State --}}
+                                        <div class="absolute inset-0 bg-error/5 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center space-y-3">
+                                            <div class="w-10 h-10 rounded-full bg-error/10 border border-error/20 flex items-center justify-center text-error shadow-sm">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <h4 class="text-xs font-bold text-base-content">Failed</h4>
+                                                @if(isset($generationStates['closeup']['error']))
+                                                    <p class="text-[9px] text-slate-500 mt-1 line-clamp-1 max-w-[160px]" title="{{ $generationStates['closeup']['error'] }}">
+                                                        {{ str_contains(strtolower($generationStates['closeup']['error']), 'content filter') ? 'Safety filter.' : $generationStates['closeup']['error'] }}
+                                                    </p>
+                                                @endif
+                                            </div>
+                                            <button type="button" wire:click="generateImage('closeup')" class="btn btn-[10px] btn-error text-white font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-sm">
+                                                Try Again
+                                            </button>
+                                        </div>
+                                    @elseif($this->selectedInfluencer->properties->closeup)
                                         <img src="{{ $this->selectedInfluencer->properties->closeup }}" class="w-full h-full object-cover" />
                                         <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
                                             <div class="flex gap-1.5 justify-center">
@@ -243,7 +396,49 @@
                             {{-- Detail Sheet --}}
                             <div class="flex-1 flex flex-col min-h-0">
                                 <div class="bg-base-100 border border-base-300 rounded-3xl overflow-hidden flex-1 min-h-[160px] relative group shadow-sm flex items-center justify-center">
-                                    @if($this->selectedInfluencer->properties->detail_sheet)
+                                    {{-- Active Loader for instant browser feedback --}}
+                                    <div wire:loading wire:target="generateImage('detail_sheet')" class="absolute inset-0 bg-base-100/80 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center space-y-3 select-none z-20">
+                                        <div class="relative w-10 h-10 flex items-center justify-center">
+                                            <div class="absolute inset-0 rounded-full border-4 border-primary/20"></div>
+                                            <div class="absolute inset-0 rounded-full border-4 border-t-primary animate-spin"></div>
+                                        </div>
+                                        <div>
+                                            <span class="text-xs font-bold tracking-wider text-slate-500 uppercase animate-pulse">Generating...</span>
+                                        </div>
+                                    </div>
+
+                                    @if(($generationStates['detail_sheet']['status'] ?? '') === 'generating')
+                                        {{-- Generating / Loading State --}}
+                                        <div class="absolute inset-0 bg-base-100/80 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center space-y-3 select-none">
+                                            <div class="relative w-10 h-10 flex items-center justify-center">
+                                                <div class="absolute inset-0 rounded-full border-4 border-primary/20"></div>
+                                                <div class="absolute inset-0 rounded-full border-4 border-t-primary animate-spin"></div>
+                                            </div>
+                                            <div>
+                                                <span class="text-xs font-bold tracking-wider text-slate-500 uppercase animate-pulse">Generating...</span>
+                                            </div>
+                                        </div>
+                                    @elseif(($generationStates['detail_sheet']['status'] ?? '') === 'failed')
+                                        {{-- Failed State --}}
+                                        <div class="absolute inset-0 bg-error/5 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center space-y-3">
+                                            <div class="w-10 h-10 rounded-full bg-error/10 border border-error/20 flex items-center justify-center text-error shadow-sm">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <h4 class="text-xs font-bold text-base-content">Failed</h4>
+                                                @if(isset($generationStates['detail_sheet']['error']))
+                                                    <p class="text-[9px] text-slate-500 mt-1 line-clamp-1 max-w-[160px]" title="{{ $generationStates['detail_sheet']['error'] }}">
+                                                        {{ str_contains(strtolower($generationStates['detail_sheet']['error']), 'content filter') ? 'Safety filter.' : $generationStates['detail_sheet']['error'] }}
+                                                    </p>
+                                                @endif
+                                            </div>
+                                            <button type="button" wire:click="generateImage('detail_sheet')" class="btn btn-[10px] btn-error text-white font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-sm">
+                                                Try Again
+                                            </button>
+                                        </div>
+                                    @elseif($this->selectedInfluencer->properties->detail_sheet)
                                         <img src="{{ $this->selectedInfluencer->properties->detail_sheet }}" class="w-full h-full object-cover" />
                                         <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
                                             <div class="flex gap-1.5 justify-center">
@@ -410,7 +605,7 @@
                                     </div>
 
                                     <div class="flex justify-end pt-2">
-                                        <x-button label="Generate Look" wire:click="generateOutfit" class="btn-primary rounded-2xl font-bold px-8 shadow shadow-primary/10" />
+                                        <x-button label="Generate Look" wire:click="generateOutfit" spinner="generateOutfit" class="btn-primary rounded-2xl font-bold px-8 shadow shadow-primary/10" />
                                     </div>
                                 </div>
 

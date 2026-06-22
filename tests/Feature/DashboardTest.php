@@ -5,6 +5,7 @@ use App\Livewire\Dashboard;
 use App\Models\Influencer;
 use App\Models\Team;
 use App\Models\User;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
@@ -68,10 +69,24 @@ test('authenticated user can select an influencer and edit metadata', function (
 });
 
 test('user can generate and download sheet images', function () {
-    $team = Team::create(['name' => 'Test Team']);
+    $team = Team::create([
+        'name' => 'Test Team',
+        'credits' => 10.00,
+    ]);
     $user = User::factory()->create();
     $user->teams()->attach($team->id);
     session(['active_team_id' => $team->id]);
+
+    // Mock API key and fake HTTP responses for Fal.ai
+    config(['services.fal.key' => 'mock-global-key', 'fal_api.key' => 'mock-global-key']);
+    Http::fake([
+        'https://fal.run/*' => Http::response([
+            'images' => [
+                ['url' => 'https://v3.fal.media/files/mock-image.png'],
+            ],
+        ], 200),
+        'https://v3.fal.media/*' => Http::response('fake binary content', 200, ['Content-Type' => 'image/png']),
+    ]);
 
     $influencer = Influencer::create([
         'team_id' => $team->id,
