@@ -426,6 +426,7 @@ class FalAiService
             $results = [];
             foreach ($payloads as $index => $payload) {
                 $results[$index] = [
+                    'status' => 'success',
                     'images' => [
                         ['url' => $this->generateDemoImage()],
                     ],
@@ -479,12 +480,17 @@ class FalAiService
 
         $results = [];
         $failedCount = 0;
+        $successCount = 0;
         $errors = [];
 
         foreach ($payloads as $index => $payload) {
             $response = $responses[(string) $index] ?? null;
             if ($response && $response->successful()) {
-                $results[$index] = $response->json();
+                $successCount++;
+                $results[$index] = [
+                    'status' => 'success',
+                    'images' => $response->json()['images'] ?? [],
+                ];
                 Log::info("FalAiService::generateParallelPayloads: Request {$index} succeeded", [
                     'response' => $results[$index],
                 ]);
@@ -492,6 +498,11 @@ class FalAiService
                 $failedCount++;
                 $errorBody = $response ? $response->body() : 'No response';
                 $errors[] = $errorBody;
+
+                $results[$index] = [
+                    'status' => 'failed',
+                    'error' => $errorBody,
+                ];
 
                 Log::error("FalAiService::generateParallelPayloads: Request {$index} failed", [
                     'status' => $response ? $response->status() : null,
@@ -501,18 +512,14 @@ class FalAiService
             }
         }
 
-        if ($failedCount > 0) {
-            Log::error('FalAiService::generateParallelPayloads: Generation failed for some requests', [
-                'failed_count' => $failedCount,
-                'errors' => $errors,
-            ]);
-            throw new \Exception('Fal.ai image generation failed for '.$failedCount.' requests. Errors: '.implode(' | ', $errors));
-        }
+        Log::info('FalAiService::generateParallelPayloads: Parallel requests execution finished', [
+            'total_count' => $count,
+            'success_count' => $successCount,
+            'failed_count' => $failedCount,
+        ]);
 
-        Log::info('FalAiService::generateParallelPayloads: Generation succeeded for all requests');
-
-        if ($shouldCharge) {
-            $team->chargeForImages($count);
+        if ($shouldCharge && $successCount > 0) {
+            $team->chargeForImages($successCount);
         }
 
         return $results;

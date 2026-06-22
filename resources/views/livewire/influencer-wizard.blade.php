@@ -557,39 +557,9 @@
 
             {{-- Step 5: Generate & Success --}}
             @if($step === 5)
-                @if($is_generating)
-                    {{-- Generation Animation --}}
-                    <div class="py-12 flex flex-col items-center justify-center text-center space-y-6" wire:init="generate">
-                        
-                        {{-- Glowing Sphere using standard primary theme pulse --}}
-                        <div class="relative w-28 h-28 flex items-center justify-center">
-                            <div class="absolute inset-0 bg-primary rounded-full blur-xl animate-pulse opacity-20"></div>
-                            <div class="w-20 h-20 bg-base-200 border border-primary/20 rounded-full flex items-center justify-center shadow-inner relative z-10">
-                                <svg class="w-8 h-8 text-primary animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                                </svg>
-                            </div>
-                        </div>
-
-                        <div>
-                            <h2 class="text-2xl font-bold text-base-content tracking-tight animate-pulse">Generating look variations...</h2>
-                            <p class="text-slate-500 text-sm mt-1 max-w-sm">We are synthesizing physical traits, backstory, and style references to build three distinct look variations via Fal.ai.</p>
-                        </div>
-
-                        {{-- Marquee progress simulation since it is a real loading state --}}
-                        <div class="w-full max-w-sm space-y-1">
-                            <div class="h-2.5 w-full bg-base-200 border border-base-300 rounded-full overflow-hidden relative">
-                                <div class="h-full bg-primary rounded-full w-1/3 absolute left-0 animate-ping" style="animation-duration: 2s;"></div>
-                            </div>
-                            <div class="flex justify-between text-[10px] text-slate-500 font-extrabold tracking-wider pt-1.5">
-                                <span>FAL.AI PROCESSING</span>
-                                <span class="animate-pulse">REAL-TIME</span>
-                            </div>
-                        </div>
-                    </div>
-                @elseif(! $is_done)
+                @if(! $is_done)
                     {{-- Choose a Look Screen --}}
-                    <div class="py-4 space-y-8 flex flex-col items-center">
+                    <div class="py-4 space-y-8 flex flex-col items-center" wire:init="generate">
                         <div class="text-center">
                             <h2 class="text-3xl font-extrabold text-base-content tracking-tight">Choose a Look</h2>
                             <p class="text-slate-500 text-sm mt-1 max-w-md">Select your favorite look variation from the options generated below.</p>
@@ -597,33 +567,85 @@
 
                         {{-- Look Variations Grid --}}
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl w-full">
-                            @foreach($generated_variations as $index => $url)
-                                <button type="button" 
-                                        wire:click="$set('selected_variation_index', {{ $index }})" 
-                                        class="relative bg-base-100 border rounded-3xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 group focus:outline-none {{ $selected_variation_index === $index ? 'border-primary ring-4 ring-primary/20 scale-[1.02]' : 'border-base-300 opacity-80 hover:opacity-100' }}">
-                                    <div class="h-96 w-full relative overflow-hidden">
-                                        <img src="{{ $url }}" class="h-full w-full object-cover" />
-                                        <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent p-4 flex justify-between items-center">
-                                            <span class="text-xs font-bold text-white uppercase tracking-wider">Option {{ $index + 1 }}</span>
-                                            @if($selected_variation_index === $index)
-                                                <span class="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white border border-white">
-                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                            @foreach($generated_variations as $index => $var)
+                                <div class="h-96 w-full relative rounded-3xl overflow-hidden shadow-lg border transition-all duration-300 bg-base-200/40
+                                    {{ ($var['status'] ?? '') === 'success' ? 'cursor-pointer hover:shadow-2xl' : '' }}
+                                    {{ $selected_variation_index === $index && ($var['status'] ?? '') === 'success' ? 'border-primary ring-4 ring-primary/20 scale-[1.02]' : 'border-base-300' }}">
+                                    
+                                    @if(($var['status'] ?? '') === 'pending')
+                                        {{-- Loading Frame --}}
+                                        <div class="absolute inset-0 bg-base-300/30 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center space-y-4">
+                                            <div class="relative w-16 h-16 flex items-center justify-center">
+                                                <div class="absolute inset-0 bg-primary rounded-full blur animate-pulse opacity-25"></div>
+                                                <div class="w-12 h-12 bg-base-100 rounded-full flex items-center justify-center shadow-inner relative">
+                                                    <svg class="w-5 h-5 text-primary animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
                                                     </svg>
-                                                </span>
-                                            @endif
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <span class="text-xs font-extrabold tracking-wider text-slate-500 uppercase animate-pulse">Generating...</span>
+                                            </div>
                                         </div>
-                                    </div>
-                                </button>
+                                    @elseif(($var['status'] ?? '') === 'failed')
+                                        {{-- Failed Frame --}}
+                                        <div class="absolute inset-0 bg-error/5 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center space-y-4">
+                                            <div class="w-12 h-12 rounded-full bg-error/10 border border-error/20 flex items-center justify-center text-error shadow-sm">
+                                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <h4 class="text-sm font-bold text-base-content">Generation failed</h4>
+                                                @if(isset($var['error']))
+                                                    <p class="text-[10px] text-slate-500 mt-1 line-clamp-2 max-w-[180px]" title="{{ $var['error'] }}">
+                                                        {{ str_contains(strtolower($var['error']), 'content filter') ? 'Blocked by content safety filter.' : $var['error'] }}
+                                                    </p>
+                                                @endif
+                                            </div>
+                                            <button type="button" wire:click="retryGeneration({{ $index }})" class="btn btn-xs btn-error text-white font-bold px-3 py-1 rounded-lg flex items-center gap-1 shadow-sm">
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H17"/>
+                                                </svg>
+                                                Try Again
+                                            </button>
+                                        </div>
+                                    @else
+                                        {{-- Successful Image Frame --}}
+                                        <div class="absolute inset-0" wire:click="$set('selected_variation_index', {{ $index }})">
+                                            <img src="{{ $var['url'] }}" class="h-full w-full object-cover select-none" />
+                                            <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent p-4 flex justify-between items-center">
+                                                <span class="text-xs font-bold text-white uppercase tracking-wider">Option {{ $index + 1 }}</span>
+                                                @if($selected_variation_index === $index)
+                                                    <span class="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white border border-white">
+                                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                                                        </svg>
+                                                    </span>
+                                                @endif
+                                            </div>
+                                        </div>
+                                    @endif
+                                </div>
                             @endforeach
                         </div>
 
                         {{-- Actions --}}
+                        @php
+                            $isAnyPending = collect($generated_variations)->contains('status', 'pending');
+                            $isSelectedSuccess = ($generated_variations[$selected_variation_index]['status'] ?? '') === 'success';
+                        @endphp
                         <div class="flex flex-col sm:flex-row gap-3 w-full max-w-sm pt-4">
-                            <button type="button" wire:click="previousStep" class="flex-1 btn btn-outline border-base-300 font-bold rounded-xl btn-ghost">
+                            <button type="button" 
+                                    @if($isAnyPending) disabled @endif
+                                    wire:click="previousStep" 
+                                    class="flex-1 btn btn-outline border-base-300 font-bold rounded-xl btn-ghost {{ $isAnyPending ? 'btn-disabled opacity-50' : '' }}">
                                 ← Re-configure
                             </button>
-                            <button type="button" wire:click="finishGeneration" class="flex-1 btn btn-primary font-bold shadow-md shadow-primary/10 rounded-xl">
+                            <button type="button" 
+                                    @if($isAnyPending || !$isSelectedSuccess) disabled @endif
+                                    wire:click="finishGeneration" 
+                                    class="flex-1 btn btn-primary font-bold shadow-md shadow-primary/10 rounded-xl {{ ($isAnyPending || !$isSelectedSuccess) ? 'btn-disabled opacity-50' : '' }}">
                                 Save & Finish →
                             </button>
                         </div>

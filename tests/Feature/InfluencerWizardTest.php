@@ -91,11 +91,13 @@ test('influencer wizard can progress and create an influencer with credit system
     // Call generate to call Fal.ai API
     $test->call('generate')
         ->assertSet('is_generating', false)
-        ->assertSet('generated_variations', [
-            'https://v3.fal.media/files/mock-image.png',
-            'https://v3.fal.media/files/mock-image.png',
-            'https://v3.fal.media/files/mock-image.png',
-        ]);
+        ->assertSet('generated_variations', function ($vars) {
+            return is_array($vars) &&
+                   count($vars) === 3 &&
+                   ($vars[0]['url'] ?? '') === 'https://v3.fal.media/files/mock-image.png' &&
+                   ($vars[1]['url'] ?? '') === 'https://v3.fal.media/files/mock-image.png' &&
+                   ($vars[2]['url'] ?? '') === 'https://v3.fal.media/files/mock-image.png';
+        });
 
     // Check that credits were charged (3 images * $0.35 = $1.05 deducted from $10.00 = $8.95)
     $team->refresh();

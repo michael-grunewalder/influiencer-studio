@@ -175,7 +175,11 @@ class InfluencerWizard extends Component
             $this->step = 5;
             $this->is_generating = true;
             $this->is_done = false;
-            $this->generated_variations = [];
+            $this->generated_variations = [
+                ['status' => 'pending', 'url' => null, 'error' => null, 'payload' => null],
+                ['status' => 'pending', 'url' => null, 'error' => null, 'payload' => null],
+                ['status' => 'pending', 'url' => null, 'error' => null, 'payload' => null],
+            ];
         }
     }
 
@@ -208,7 +212,13 @@ class InfluencerWizard extends Component
      */
     public function generate(FalAiService $falAiService): void
     {
-        if (! $this->is_generating || ! empty($this->generated_variations)) {
+        if (! $this->is_generating) {
+            return;
+        }
+
+        // If we already have success/failed results, or if prompts are already populated, don't run again
+        $hasResults = collect($this->generated_variations)->contains(fn ($v) => in_array($v['status'], ['success', 'failed']));
+        if ($hasResults || (isset($this->generated_variations[0]['prompt']) && $this->generated_variations[0]['prompt'] !== null)) {
             return;
         }
 
@@ -283,7 +293,7 @@ class InfluencerWizard extends Component
             $width = $modelConfig['default_size']['width'] ?? 768;
             $height = $modelConfig['default_size']['height'] ?? 1024;
 
-            foreach ($prompts as $prompt) {
+            foreach ($prompts as $index => $prompt) {
                 $payload = [
                     'prompt' => $prompt,
                     'image_size' => [
@@ -297,6 +307,10 @@ class InfluencerWizard extends Component
                 }
 
                 $payloads[] = $payload;
+
+                // Store details in components state
+                $this->generated_variations[$index]['prompt'] = $prompt;
+                $this->generated_variations[$index]['payload'] = $payload;
             }
 
             Log::info('InfluencerWizard::generate: Prepared payloads for parallel generation', [
@@ -307,24 +321,33 @@ class InfluencerWizard extends Component
             // 5. Generate parallel variations
             $results = $falAiService->generateParallelPayloads($team, $payloads, $selectedModel);
 
-            $urls = [];
-            foreach ($results as $res) {
-                if (isset($res['images'][0]['url'])) {
-                    $urls[] = $res['images'][0]['url'];
+            foreach ($results as $index => $res) {
+                if ($res['status'] === 'success') {
+                    $this->generated_variations[$index]['status'] = 'success';
+                    $this->generated_variations[$index]['url'] = $res['images'][0]['url'] ?? null;
+                    $this->generated_variations[$index]['error'] = null;
+                } else {
+                    $this->generated_variations[$index]['status'] = 'failed';
+                    $this->generated_variations[$index]['error'] = $res['error'] ?? 'Unknown error';
+                    $this->generated_variations[$index]['url'] = null;
                 }
             }
 
-            if (count($urls) < 3) {
-                throw new \Exception(__('Fal.ai hat nicht genug Bilder zurückgegeben.'));
+            // Find first successful variation and set as selected_variation_index
+            $firstSuccess = null;
+            foreach ($this->generated_variations as $idx => $var) {
+                if ($var['status'] === 'success') {
+                    $firstSuccess = $idx;
+                    break;
+                }
             }
+            $this->selected_variation_index = $firstSuccess ?? 0;
 
-            $this->generated_variations = $urls;
-            $this->selected_variation_index = 0;
             $this->is_generating = false;
             $this->dispatch('credits-updated');
 
-            Log::info('InfluencerWizard::generate: Successfully generated variations', [
-                'generated_variations' => $urls,
+            Log::info('InfluencerWizard::generate: Finished generating variations', [
+                'generated_variations' => $this->generated_variations,
             ]);
 
             Toaster::success(__('Variationen erfolgreich generiert! Wähle deinen Favoriten.'));
@@ -338,6 +361,86 @@ class InfluencerWizard extends Component
 
             $this->is_generating = false;
             $this->step = 4;
+            Toaster::error(__('Fehler bei der Bildgenerierung: ').$e->getMessage());
+        }
+    }
+
+    /**
+     * Retry generation for a single variation that failed.
+     */
+    public function retryGeneration(int $index, FalAiService $falAiService): void
+    {
+        if (! isset($this->generated_variations[$index])) {
+            return;
+        }
+
+        $variation = $this->generated_variations[$index];
+        if (! $variation['payload']) {
+            Toaster::error(__('Kein Payload für diese Option gefunden.'));
+
+            return;
+        }
+
+        $this->generated_variations[$index]['status'] = 'pending';
+        $this->generated_variations[$index]['error'] = null;
+        $this->generated_variations[$index]['url'] = null;
+
+        try {
+            $team = $this->getActiveTeam();
+            if (! $team) {
+                throw new \Exception(__('Kein aktives Team gefunden.'));
+            }
+
+            $modelKey = 'ideogram';
+            $modelConfig = config("image_models.models.{$modelKey}");
+            if (! $modelConfig) {
+                throw new \Exception(__('Model configuration for Ideogram v4 not found.'));
+            }
+
+            $uploadedUrl = $variation['payload']['image_url'] ?? null;
+            $selectedModel = $uploadedUrl ? $modelConfig['model_edit'] : $modelConfig['model'];
+
+            Log::info('InfluencerWizard::retryGeneration: Retrying single request', [
+                'index' => $index,
+                'selected_model' => $selectedModel,
+                'payload' => $variation['payload'],
+            ]);
+
+            // Single payload retry using parallel generation logic to maintain consistency
+            $results = $falAiService->generateParallelPayloads($team, [$variation['payload']], $selectedModel);
+            $res = $results[0] ?? null;
+
+            if ($res && $res['status'] === 'success') {
+                $this->generated_variations[$index]['status'] = 'success';
+                $this->generated_variations[$index]['url'] = $res['images'][0]['url'] ?? null;
+
+                // If the selected variation index was on this and it failed, keep/set it selected
+                if ($this->selected_variation_index === $index) {
+                    $this->selected_variation_index = $index;
+                } else {
+                    // If the current selection is not a success, select this one
+                    $currentSelection = $this->generated_variations[$this->selected_variation_index] ?? null;
+                    if (! $currentSelection || ($currentSelection['status'] ?? '') !== 'success') {
+                        $this->selected_variation_index = $index;
+                    }
+                }
+
+                $this->dispatch('credits-updated');
+                Toaster::success(__('Variation erfolgreich neu generiert!'));
+            } else {
+                $this->generated_variations[$index]['status'] = 'failed';
+                $this->generated_variations[$index]['error'] = $res['error'] ?? 'Unknown error';
+                Toaster::error(__('Fehler bei der Neugenerierung.'));
+            }
+        } catch (\Throwable $e) {
+            Log::error('InfluencerWizard::retryGeneration: Retry failed', [
+                'index' => $index,
+                'error_message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            $this->generated_variations[$index]['status'] = 'failed';
+            $this->generated_variations[$index]['error'] = $e->getMessage();
             Toaster::error(__('Fehler bei der Bildgenerierung: ').$e->getMessage());
         }
     }
@@ -358,7 +461,8 @@ class InfluencerWizard extends Component
             $stylePath = $this->style_reference->store('references', 'public');
         }
 
-        $selectedAvatar = $this->generated_variations[$this->selected_variation_index] ?? 'https://picsum.photos/720/1280';
+        $variation = $this->generated_variations[$this->selected_variation_index] ?? null;
+        $selectedAvatar = ($variation && isset($variation['url'])) ? $variation['url'] : 'https://picsum.photos/720/1280';
         $this->generated_avatar = $selectedAvatar;
 
         $properties = new InfluencerProperties(

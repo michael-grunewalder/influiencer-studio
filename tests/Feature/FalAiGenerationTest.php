@@ -88,9 +88,9 @@ test('wizard uses text-to-image ideogram v4 when no reference is provided', func
         ->assertSet('generated_variations', function ($vars) {
             return is_array($vars) &&
                    count($vars) === 3 &&
-                   str_starts_with($vars[0], 'https://v3.fal.media/files/') &&
-                   str_starts_with($vars[1], 'https://v3.fal.media/files/') &&
-                   str_starts_with($vars[2], 'https://v3.fal.media/files/');
+                   str_starts_with($vars[0]['url'] ?? '', 'https://v3.fal.media/files/') &&
+                   str_starts_with($vars[1]['url'] ?? '', 'https://v3.fal.media/files/') &&
+                   str_starts_with($vars[2]['url'] ?? '', 'https://v3.fal.media/files/');
         });
 
     Http::assertSent(function (Request $request) {
@@ -146,9 +146,9 @@ test('wizard uses image-to-image ideogram v4 when reference image is uploaded', 
         ->assertSet('generated_variations', function ($vars) {
             return is_array($vars) &&
                    count($vars) === 3 &&
-                   str_starts_with($vars[0], 'https://v3.fal.media/files/') &&
-                   str_starts_with($vars[1], 'https://v3.fal.media/files/') &&
-                   str_starts_with($vars[2], 'https://v3.fal.media/files/');
+                   str_starts_with($vars[0]['url'] ?? '', 'https://v3.fal.media/files/') &&
+                   str_starts_with($vars[1]['url'] ?? '', 'https://v3.fal.media/files/') &&
+                   str_starts_with($vars[2]['url'] ?? '', 'https://v3.fal.media/files/');
         });
 
     Http::assertSent(function (Request $request) {
@@ -163,4 +163,83 @@ test('wizard uses image-to-image ideogram v4 when reference image is uploaded', 
                $payload['image_size']['width'] === 768 &&
                $payload['image_size']['height'] === 1024;
     });
+});
+
+test('wizard handles partial generation failure and retry successfully', function () {
+    $user = User::factory()->create();
+    $team = Team::create(['name' => 'Design Team', 'credits' => 10.00]);
+    $user->teams()->attach($team);
+
+    config(['fal_api.key' => 'mock-key', 'services.fal.key' => 'mock-key']);
+
+    // Mock first call: 2 success, 1 failure (request 3)
+    Http::fake(function (Request $request) {
+        if ($request->url() === 'https://fal.run/ideogram/v4') {
+            static $count = 0;
+            $count++;
+            if ($count === 3) {
+                return Http::response(['detail' => 'Safety filter triggered'], 400);
+            }
+
+            return Http::response([
+                'images' => [
+                    ['url' => 'https://v3.fal.media/files/success-'.$count.'.png'],
+                ],
+            ], 200);
+        }
+    });
+
+    $test = Livewire::actingAs($user)
+        ->test(InfluencerWizard::class)
+        ->set('name', 'Elena Sterling')
+        ->set('gender', 'Female')
+        ->set('age', 26)
+        ->set('niches', ['Fashion'])
+        ->call('nextStep') // Step 2
+        ->call('nextStep') // Step 3
+        ->set('backstory', 'A digital model.')
+        ->call('nextStep') // Step 4
+        ->set('aesthetic_vibe', 'Minimalist')
+        ->call('nextStep') // Step 5
+        ->call('generate');
+
+    // Assert first two are success, third is failed
+    $test->assertSet('generated_variations', function ($vars) {
+        return is_array($vars) &&
+               count($vars) === 3 &&
+               $vars[0]['status'] === 'success' &&
+               $vars[0]['url'] === 'https://v3.fal.media/files/success-1.png' &&
+               $vars[1]['status'] === 'success' &&
+               $vars[1]['url'] === 'https://v3.fal.media/files/success-2.png' &&
+               $vars[2]['status'] === 'failed' &&
+               str_contains($vars[2]['error'], 'Safety filter triggered');
+    });
+
+    // Check that credits were charged only for 2 successful images (2 * $0.35 = $0.70 deducted from $10.00 = $9.30)
+    $team->refresh();
+    expect((float) $team->credits)->toBe(9.30);
+
+    // Call retry for the failed variation (index 2)
+    Http::fake([
+        'https://fal.run/ideogram/v4' => Http::response([
+            'images' => [
+                ['url' => 'https://v3.fal.media/files/retry-success.png'],
+            ],
+        ], 200),
+    ]);
+
+    $test->call('retryGeneration', 2);
+
+    $test->assertSet('generated_variations', function ($vars) {
+        return is_array($vars) &&
+               count($vars) === 3 &&
+               $vars[0]['status'] === 'success' &&
+               $vars[1]['status'] === 'success' &&
+               $vars[2]['status'] === 'success' &&
+               $vars[2]['url'] === 'https://v3.fal.media/files/success-4.png';
+    });
+
+    // Check credits charged again (1 successful retry -> 1 * $0.35 = $0.35 deducted from $9.30 = $8.95)
+    $team->refresh();
+    expect((float) $team->credits)->toBe(8.95);
 });
