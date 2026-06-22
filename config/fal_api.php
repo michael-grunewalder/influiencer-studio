@@ -23,6 +23,7 @@ return [
         'gpt1_edit' => 'gpt-image-1.5/edit',
         'gpt2' => 'openai/gpt-image-2',
         'gpt2_edit' => 'openai/gpt-image-2/edit',
-        'ideogram' => '',
+        'ideogram' => 'ideogram/v4',
+        'ideogram_edit' => 'ideogram/v4/image-to-image',
     ],
 ];

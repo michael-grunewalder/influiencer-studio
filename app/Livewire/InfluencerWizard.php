@@ -8,6 +8,7 @@ use App\Models\Team;
 use App\Services\FalAiService;
 use App\Services\PromptBuilderService;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -202,11 +203,36 @@ class InfluencerWizard extends Component
     /**
      * Call Fal.ai parallel generation endpoint to build 3 variations.
      */
+    /**
+     * Call Fal.ai parallel generation endpoint to build 3 variations using Ideogram v4.
+     */
     public function generate(FalAiService $falAiService): void
     {
         if (! $this->is_generating || ! empty($this->generated_variations)) {
             return;
         }
+
+        $wizardData = [
+            'name' => $this->name,
+            'gender' => $this->gender,
+            'age' => $this->age,
+            'niches' => $this->niches,
+            'backstory' => $this->backstory,
+            'personality' => $this->personality,
+            'ethnicity' => $this->ethnicity,
+            'skin_tone' => $this->skin_tone,
+            'hair_color' => $this->hair_color,
+            'hair_length' => $this->hair_length,
+            'hair_texture' => $this->hair_texture,
+            'eye_color' => $this->eye_color,
+            'build' => $this->build,
+            'custom_description' => $this->custom_description,
+            'aesthetic_vibe' => $this->aesthetic_vibe,
+        ];
+
+        Log::info('InfluencerWizard::generate: Starting image generation process', [
+            'wizard_data' => $wizardData,
+        ]);
 
         try {
             $team = $this->getActiveTeam();
@@ -214,29 +240,72 @@ class InfluencerWizard extends Component
                 throw new \Exception(__('Kein aktives Team gefunden.'));
             }
 
+            // 1. Resolve Ideogram v4 model config
+            $modelKey = 'ideogram';
+            $modelConfig = config("image_models.models.{$modelKey}");
+            if (! $modelConfig) {
+                throw new \Exception(__('Model configuration for Ideogram v4 not found.'));
+            }
+
+            // 2. Handle reference image upload to fal.ai CDN if available
+            $referenceFile = $this->face_reference ?: $this->style_reference;
+            $uploadedUrl = null;
+            if ($referenceFile) {
+                Log::info('InfluencerWizard::generate: Reference file found, initiating upload to fal.ai CDN', [
+                    'original_name' => $referenceFile->getClientOriginalName(),
+                    'mime_type' => $referenceFile->getMimeType(),
+                    'size' => $referenceFile->getSize(),
+                ]);
+
+                $uploadedUrl = $falAiService->uploadFile($team, $referenceFile->getRealPath(), $referenceFile->getMimeType() ?: 'image/png');
+
+                Log::info('InfluencerWizard::generate: Reference file uploaded successfully', [
+                    'uploaded_url' => $uploadedUrl,
+                ]);
+            }
+
+            // Choose endpoint based on reference presence
+            $selectedModel = $uploadedUrl ? $modelConfig['model_edit'] : $modelConfig['model'];
+
+            // 3. Build variation prompts
             $physicalDesc = PromptBuilderService::buildPhysicalDescString($this);
-
-            $prompts = PromptBuilderService::buildThreeVariationPrompts([
-                'gender' => $this->gender,
-                'age' => $this->age,
-                'niches' => $this->niches,
-                'backstory' => $this->backstory,
-                'personality' => $this->personality,
-                'ethnicity' => $this->ethnicity,
-                'skin_tone' => $this->skin_tone,
-                'hair_color' => $this->hair_color,
-                'hair_length' => $this->hair_length,
-                'hair_texture' => $this->hair_texture,
-                'eye_color' => $this->eye_color,
-                'build' => $this->build,
-                'custom_description' => $this->custom_description,
-                'aesthetic_vibe' => $this->aesthetic_vibe,
+            $prompts = PromptBuilderService::buildThreeVariationPrompts(array_merge($wizardData, [
                 'physicalDesc' => $physicalDesc,
-            ], '9:16', 'gpt_image_2');
+            ]), '9:16', $selectedModel);
 
-            $results = $falAiService->generateParallel($team, $prompts, 'fal-ai/flux/schnell', [
-                'aspect_ratio' => '9:16',
+            Log::info('InfluencerWizard::generate: Generated prompts for variations', [
+                'selected_model' => $selectedModel,
+                'prompts' => $prompts,
             ]);
+
+            // 4. Compose payloads with default size 768x1024
+            $payloads = [];
+            $width = $modelConfig['default_size']['width'] ?? 768;
+            $height = $modelConfig['default_size']['height'] ?? 1024;
+
+            foreach ($prompts as $prompt) {
+                $payload = [
+                    'prompt' => $prompt,
+                    'image_size' => [
+                        'width' => $width,
+                        'height' => $height,
+                    ],
+                ];
+
+                if ($uploadedUrl) {
+                    $payload['image_url'] = $uploadedUrl;
+                }
+
+                $payloads[] = $payload;
+            }
+
+            Log::info('InfluencerWizard::generate: Prepared payloads for parallel generation', [
+                'selected_model' => $selectedModel,
+                'payloads' => $payloads,
+            ]);
+
+            // 5. Generate parallel variations
+            $results = $falAiService->generateParallelPayloads($team, $payloads, $selectedModel);
 
             $urls = [];
             foreach ($results as $res) {
@@ -254,8 +323,19 @@ class InfluencerWizard extends Component
             $this->is_generating = false;
             $this->dispatch('credits-updated');
 
+            Log::info('InfluencerWizard::generate: Successfully generated variations', [
+                'generated_variations' => $urls,
+            ]);
+
             Toaster::success(__('Variationen erfolgreich generiert! Wähle deinen Favoriten.'));
         } catch (\Throwable $e) {
+            Log::error('InfluencerWizard::generate: Image generation failed', [
+                'error_message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'wizard_data' => $wizardData,
+                'uploaded_url' => $uploadedUrl ?? null,
+            ]);
+
             $this->is_generating = false;
             $this->step = 4;
             Toaster::error(__('Fehler bei der Bildgenerierung: ').$e->getMessage());
