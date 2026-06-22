@@ -44,6 +44,10 @@
                             <x-form wire:submit="saveTeam">
                                 <x-input label="Team-Name" wire:model="team_name" />
                                 <x-textarea label="Beschreibung" wire:model="team_description" rows="3" />
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <x-input label="FAL.AI API Key" wire:model="team_fal_api_key" type="password" placeholder="fal_..." />
+                                    <x-input label="CLAUDE API Key" wire:model="team_claude_api_key" type="password" placeholder="sk-ant-..." />
+                                </div>
                                 <x-slot:actions>
                                     <x-button label="Speichern" type="submit" class="btn-primary rounded-xl font-bold px-6" spinner="saveTeam" />
                                 </x-slot:actions>
@@ -58,6 +62,16 @@
                                 <div>
                                     <div class="text-[10px] font-extrabold text-slate-500 uppercase tracking-wide">{{ __('Beschreibung') }}</div>
                                     <div class="text-sm text-slate-500 leading-relaxed">{{ $this->selectedTeam->description ?? __('Keine Beschreibung vorhanden.') }}</div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <div class="text-[10px] font-extrabold text-slate-500 uppercase tracking-wide">{{ __('FAL.AI API Key') }}</div>
+                                        <div class="text-sm font-mono text-base-content break-all">{{ $this->maskedFalApiKey }}</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-[10px] font-extrabold text-slate-500 uppercase tracking-wide">{{ __('CLAUDE API Key') }}</div>
+                                        <div class="text-sm font-mono text-base-content break-all">{{ $this->maskedClaudeApiKey }}</div>
+                                    </div>
                                 </div>
                             </div>
                         @endif

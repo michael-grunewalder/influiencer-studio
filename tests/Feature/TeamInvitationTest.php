@@ -121,6 +121,51 @@ test('only users with admin role on the team can edit team details', function ()
     expect($team->refresh()->name)->toBe('Admin New Name');
 });
 
+test('only users with admin role on the team can edit fal.ai and claude api keys', function () {
+    $userManage = User::factory()->create();
+    $userManage->givePermissionTo('team.view');
+
+    $userAdmin = User::factory()->create();
+    $userAdmin->givePermissionTo('team.view');
+
+    $team = Team::create(['name' => 'Original Name']);
+    $userManage->teams()->attach($team, ['role' => 'manage']);
+    $userAdmin->teams()->attach($team, ['role' => 'admin']);
+
+    // Admin user successfully saves keys
+    Livewire::actingAs($userAdmin)
+        ->test(Teams::class)
+        ->set('selectedTeamId', $team->id)
+        ->set('team_name', 'Original Name')
+        ->set('team_fal_api_key', 'fal_api_key_long_value_here')
+        ->set('team_claude_api_key', 'sk-ant-claude_api_key_long_value_here')
+        ->call('saveTeam')
+        ->assertHasNoErrors();
+
+    $team->refresh();
+    expect($team->fal_api_key)->toBe('fal_api_key_long_value_here');
+    expect($team->claude_api_key)->toBe('sk-ant-claude_api_key_long_value_here');
+});
+
+test('other team members see masked fal.ai and claude api keys in selected team details', function () {
+    $userMember = User::factory()->create();
+    $userMember->givePermissionTo('team.view');
+
+    $team = Team::create([
+        'name' => 'Original Name',
+        'fal_api_key' => 'fal_api_key_long_value_here',
+        'claude_api_key' => 'sk-ant-claude_api_key_long_value_here',
+    ]);
+    $userMember->teams()->attach($team, ['role' => 'view']);
+
+    $test = Livewire::actingAs($userMember)
+        ->test(Teams::class)
+        ->set('selectedTeamId', $team->id);
+
+    expect($test->instance()->maskedFalApiKey)->toBe('fal_api_'.str_repeat('*', strlen($team->fal_api_key) - 8));
+    expect($test->instance()->maskedClaudeApiKey)->toBe('sk-ant-c'.str_repeat('*', strlen($team->claude_api_key) - 8));
+});
+
 test('accept invitation route validates signature', function () {
     $team = Team::create(['name' => 'Testing']);
     $invitation = TeamInvitation::create([

@@ -30,6 +30,10 @@ class Teams extends Component
 
     public string $team_description = '';
 
+    public string $team_fal_api_key = '';
+
+    public string $team_claude_api_key = '';
+
     public function mount(): void
     {
         $user = auth()->user();
@@ -90,6 +94,31 @@ class Teams extends Component
         return $user && $user->hasTeamRole($this->selectedTeamId, 'admin');
     }
 
+    #[Computed]
+    public function maskedFalApiKey(): string
+    {
+        return $this->maskApiKey($this->selectedTeam?->fal_api_key);
+    }
+
+    #[Computed]
+    public function maskedClaudeApiKey(): string
+    {
+        return $this->maskApiKey($this->selectedTeam?->claude_api_key);
+    }
+
+    private function maskApiKey(?string $key): string
+    {
+        if (empty($key)) {
+            return __('Nicht konfiguriert');
+        }
+
+        if (strlen($key) <= 8) {
+            return $key;
+        }
+
+        return substr($key, 0, 8).str_repeat('*', strlen($key) - 8);
+    }
+
     public function selectTeam(string $id): void
     {
         $this->selectedTeamId = $id;
@@ -97,6 +126,8 @@ class Teams extends Component
         if ($team) {
             $this->team_name = $team->name;
             $this->team_description = $team->description ?? '';
+            $this->team_fal_api_key = $team->fal_api_key ?? '';
+            $this->team_claude_api_key = $team->claude_api_key ?? '';
         }
     }
 
@@ -109,6 +140,8 @@ class Teams extends Component
         $this->validate([
             'team_name' => 'required|string|min:2|max:100',
             'team_description' => 'nullable|string|max:500',
+            'team_fal_api_key' => 'nullable|string|max:255',
+            'team_claude_api_key' => 'nullable|string|max:255',
         ]);
 
         $team = $this->selectedTeam;
@@ -116,6 +149,8 @@ class Teams extends Component
             $team->update([
                 'name' => $this->team_name,
                 'description' => $this->team_description ?: null,
+                'fal_api_key' => $this->team_fal_api_key ?: null,
+                'claude_api_key' => $this->team_claude_api_key ?: null,
             ]);
 
             Toaster::success(__('Teaminformationen erfolgreich gespeichert!'));
