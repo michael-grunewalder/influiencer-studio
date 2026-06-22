@@ -91,7 +91,7 @@ test('falai image generation records spending transaction log', function () {
         'credits' => 10.00,
     ]);
 
-    config(['services.fal.key' => 'bearny-codes']);
+    config(['services.fal.key' => 'bearny-codes', 'fal_api.key' => 'bearny-codes']);
 
     Http::preventStrayRequests();
 

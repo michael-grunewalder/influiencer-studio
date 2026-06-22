@@ -48,6 +48,15 @@
                                     <x-input label="FAL.AI API Key" wire:model="team_fal_api_key" type="password" placeholder="fal_..." />
                                     <x-input label="CLAUDE API Key" wire:model="team_claude_api_key" type="password" placeholder="sk-ant-..." />
                                 </div>
+                                @if($fal_account_balance)
+                                    <div class="p-3 bg-base-200/50 rounded-xl flex justify-between items-center text-xs mt-2 border border-base-300">
+                                        <span class="font-bold text-slate-500">FAL.AI Account Balance:</span>
+                                        <span class="font-mono font-black text-success">
+                                            ${{ number_format($fal_account_balance['credits']['current_balance'] ?? 0.00, 2) }} {{ $fal_account_balance['credits']['currency'] ?? 'USD' }}
+                                            <span class="text-[10px] text-slate-450 font-bold">({{ $fal_account_balance['username'] ?? 'FAL' }})</span>
+                                        </span>
+                                    </div>
+                                @endif
                                 <x-slot:actions>
                                     <x-button label="Speichern" type="submit" class="btn-primary rounded-xl font-bold px-6" spinner="saveTeam" />
                                 </x-slot:actions>
@@ -73,6 +82,15 @@
                                         <div class="text-sm font-mono text-base-content break-all">{{ $this->maskedClaudeApiKey }}</div>
                                     </div>
                                 </div>
+                                @if($fal_account_balance)
+                                    <div class="p-3 bg-base-200/50 rounded-xl flex justify-between items-center text-xs mt-2 border border-base-300">
+                                        <span class="font-bold text-slate-500">FAL.AI Account Balance:</span>
+                                        <span class="font-mono font-black text-success">
+                                            ${{ number_format($fal_account_balance['credits']['current_balance'] ?? 0.00, 2) }} {{ $fal_account_balance['credits']['currency'] ?? 'USD' }}
+                                            <span class="text-[10px] text-slate-450 font-bold">({{ $fal_account_balance['username'] ?? 'FAL' }})</span>
+                                        </span>
+                                    </div>
+                                @endif
                             </div>
                         @endif
                     </x-card>

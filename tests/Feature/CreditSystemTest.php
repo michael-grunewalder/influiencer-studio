@@ -72,7 +72,7 @@ test('falai service falls back to global key and charges credits', function () {
         'credits' => 1.00,
     ]);
 
-    config(['services.fal.key' => 'global-api-key']);
+    config(['services.fal.key' => 'global-api-key', 'fal_api.key' => 'global-api-key']);
 
     Http::fake([
         'https://fal.run/*' => Http::response([
@@ -94,7 +94,7 @@ test('falai service throws exception if team lacks credits and no key', function
         'credits' => 0.20, // insufficient for 1 image ($0.35)
     ]);
 
-    config(['services.fal.key' => 'global-api-key']);
+    config(['services.fal.key' => 'global-api-key', 'fal_api.key' => 'global-api-key']);
 
     $service = new FalAiService;
 
@@ -108,7 +108,7 @@ test('falai service throws exception if no API key is configured', function () {
         'credits' => 10.00,
     ]);
 
-    config(['services.fal.key' => null]);
+    config(['services.fal.key' => null, 'fal_api.key' => null]);
     putenv('FAL_API_KEY='); // Clear env fallback
 
     $service = new FalAiService;
@@ -123,7 +123,7 @@ test('falai service bypasses API, returns watermarked demo image, and deducts cr
         'credits' => 10.00,
     ]);
 
-    config(['services.fal.key' => 'bearny-codes']);
+    config(['services.fal.key' => 'bearny-codes', 'fal_api.key' => 'bearny-codes']);
 
     Http::preventStrayRequests();
 
@@ -150,7 +150,7 @@ test('falai service does not bypass API if key is bearny-codes in non-local env'
         'credits' => 10.00,
     ]);
 
-    config(['services.fal.key' => 'bearny-codes']);
+    config(['services.fal.key' => 'bearny-codes', 'fal_api.key' => 'bearny-codes']);
 
     // Change environment to production
     $originalEnv = app()->environment();

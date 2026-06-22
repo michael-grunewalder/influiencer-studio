@@ -102,6 +102,7 @@ class Dashboard extends Component
     public function updatedSelectedTeamId(string $value): void
     {
         session(['active_team_id' => $value]);
+        $this->dispatch('credits-updated');
         $first = $this->influencers->first();
         if ($first) {
             $this->selectInfluencer($first->id);

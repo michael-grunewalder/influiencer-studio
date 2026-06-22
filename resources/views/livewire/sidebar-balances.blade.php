@@ -13,4 +13,13 @@
         <span class="text-[11px] font-extrabold tracking-widest text-slate-500 uppercase">{{ __('labels.team_balance') }}</span>
         <span class="font-mono text-xs font-black text-base-content">${{ number_format($teamBalance, 2) }}</span>
     </div>
+
+    @if($falBalance)
+        <div class="flex items-center justify-between">
+            <span class="text-[11px] font-extrabold tracking-widest text-slate-500 uppercase">{{ __('FAL.AI Balance') }}</span>
+            <span class="font-mono text-xs font-black text-success" title="User: {{ $falBalance['username'] ?? 'FAL' }}">
+                ${{ number_format($falBalance['credits']['current_balance'] ?? 0.00, 2) }}
+            </span>
+        </div>
+    @endif
 </div>

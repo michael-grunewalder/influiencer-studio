@@ -43,7 +43,7 @@ test('influencer wizard can progress and create an influencer with credit system
     $user->teams()->attach($team);
 
     // Mock global API key in config
-    config(['services.fal.key' => 'mock-global-key']);
+    config(['services.fal.key' => 'mock-global-key', 'fal_api.key' => 'mock-global-key']);
 
     // Mock Fal.ai image generation API
     Http::fake([

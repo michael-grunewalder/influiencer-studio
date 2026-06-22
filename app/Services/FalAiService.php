@@ -6,6 +6,7 @@ use App\Models\Team;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class FalAiService
 {
@@ -171,8 +172,11 @@ class FalAiService
             ];
         }
 
-        $apiKey = config('services.fal.key');
-        if (! $apiKey) {
+        $apiKey = config('fal_api.key');
+        if ($apiKey === 'NO_FAL_API_KEY_SET' || ! $apiKey) {
+            $apiKey = config('services.fal.key');
+        }
+        if ($apiKey === 'NO_FAL_API_KEY_SET' || ! $apiKey) {
             throw new \Exception('No API key configured for the team or globally.');
         }
 
@@ -273,5 +277,82 @@ class FalAiService
         imagedestroy($image);
 
         return '/storage/references/'.$filename;
+    }
+
+    /**
+     * Fetch FAL.AI account billing balance.
+     */
+    public function getAccountBalance(?string $apiKey = null): ?array
+    {
+        // Resolve key
+        $key = $apiKey;
+        if (! $key) {
+            $key = config('fal_api.key');
+            if ($key === 'NO_FAL_API_KEY_SET' || ! $key) {
+                $key = config('services.fal.key');
+            }
+        }
+
+        if ($key === 'NO_FAL_API_KEY_SET' || ! $key) {
+            Log::warning('FalAiService::getAccountBalance: No API key found.');
+
+            return null;
+        }
+
+        // Mask key for log file security
+        $maskedKey = strlen($key) <= 8 ? $key : substr($key, 0, 8).str_repeat('*', strlen($key) - 8);
+
+        // If local/testing bypass key
+        if ($key === 'bearny-codes' && app()->environment('local', 'testing')) {
+            Log::info('FalAiService::getAccountBalance: Bypass mock billing balance check', [
+                'api_key' => $maskedKey,
+            ]);
+
+            return [
+                'username' => 'bearny-user-mock',
+                'credits' => [
+                    'current_balance' => 99.75,
+                    'currency' => 'USD',
+                ],
+            ];
+        }
+
+        // Build URL
+        $baseUrl = rtrim(config('fal_api.base_url', 'https://api.fal.ai/v1'), '/');
+        $endpoint = ltrim(config('fal_api.account.balance', 'account/billing?expand=credits'), '/');
+        $url = $baseUrl.'/'.$endpoint;
+
+        Log::info('FalAiService::getAccountBalance: Sending request to FAL.AI API', [
+            'url' => $url,
+            'api_key' => $maskedKey,
+        ]);
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Key '.$key,
+            ])->timeout(10)->get($url);
+
+            if ($response->failed()) {
+                Log::error('FalAiService::getAccountBalance: FAL.AI billing request failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+
+                return null;
+            }
+
+            $data = $response->json();
+            Log::info('FalAiService::getAccountBalance: FAL.AI billing request succeeded', [
+                'response' => $data,
+            ]);
+
+            return $data;
+        } catch (\Exception $e) {
+            Log::error('FalAiService::getAccountBalance: FAL.AI billing request threw exception', [
+                'message' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 }

@@ -252,6 +252,7 @@ class InfluencerWizard extends Component
             $this->generated_variations = $urls;
             $this->selected_variation_index = 0;
             $this->is_generating = false;
+            $this->dispatch('credits-updated');
 
             Toaster::success(__('Variationen erfolgreich generiert! Wähle deinen Favoriten.'));
         } catch (\Throwable $e) {

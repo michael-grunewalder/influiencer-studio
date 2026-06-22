@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Mail\TeamInvitationMail;
 use App\Models\Team;
 use App\Models\TeamInvitation;
+use App\Services\FalAiService;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
@@ -33,6 +34,8 @@ class Teams extends Component
     public string $team_fal_api_key = '';
 
     public string $team_claude_api_key = '';
+
+    public ?array $fal_account_balance = null;
 
     public function mount(): void
     {
@@ -128,6 +131,9 @@ class Teams extends Component
             $this->team_description = $team->description ?? '';
             $this->team_fal_api_key = $team->fal_api_key ?? '';
             $this->team_claude_api_key = $team->claude_api_key ?? '';
+
+            $service = app(FalAiService::class);
+            $this->fal_account_balance = $service->getAccountBalance($team->fal_api_key);
         }
     }
 
@@ -152,6 +158,10 @@ class Teams extends Component
                 'fal_api_key' => $this->team_fal_api_key ?: null,
                 'claude_api_key' => $this->team_claude_api_key ?: null,
             ]);
+
+            $service = app(FalAiService::class);
+            $this->fal_account_balance = $service->getAccountBalance($team->fal_api_key);
+            $this->dispatch('credits-updated');
 
             Toaster::success(__('Teaminformationen erfolgreich gespeichert!'));
         }
