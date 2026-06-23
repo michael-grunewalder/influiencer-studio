@@ -306,7 +306,8 @@ class Dashboard extends Component
             }
 
             // Resolve Ideogram model config
-            $modelKey = in_array($field, $useGPT2) ? 'gpt2' : 'ideogram';
+            //$modelKey = in_array($field, $useGPT2) ? 'gpt2' : 'ideogram';
+            $modelKey = ($field !==  'avatar') ? 'gpt2' : 'ideogram';
             $modelConfig = config("image_models.models.{$modelKey}");
             if (! $modelConfig) {
                 throw new \Exception('Model configuration for Ideogram not found.');
