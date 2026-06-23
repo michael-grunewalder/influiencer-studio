@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Team;
 use App\Models\TeamAsset;
 use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -64,7 +65,7 @@ class FalAiService
             $response = Http::withHeaders([
                 'Authorization' => 'Key '.$apiKey,
                 'Content-Type' => 'application/json',
-            ])->timeout(60)->post("https://fal.run/{$model}", $payload);
+            ])->timeout(180)->post("https://fal.run/{$model}", $payload);
 
             if ($response->failed()) {
                 Log::error('FalAiService::generate: Generation request failed', [
@@ -466,7 +467,7 @@ class FalAiService
                             'Authorization' => 'Key '.$apiKey,
                             'Content-Type' => 'application/json',
                         ])
-                        ->timeout(60)
+                        ->timeout(180)
                         ->post("https://fal.run/{$model}", $payload);
                 }
 
@@ -487,7 +488,7 @@ class FalAiService
 
         foreach ($payloads as $index => $payload) {
             $response = $responses[(string) $index] ?? null;
-            if ($response && $response->successful()) {
+            if ($response instanceof Response && $response->successful()) {
                 $successCount++;
                 $results[$index] = [
                     'status' => 'success',
@@ -498,7 +499,16 @@ class FalAiService
                 ]);
             } else {
                 $failedCount++;
-                $errorBody = $response ? $response->body() : 'No response';
+                if ($response instanceof Response) {
+                    $errorBody = $response->body();
+                    $status = $response->status();
+                } elseif ($response instanceof \Throwable) {
+                    $errorBody = $response->getMessage();
+                    $status = null;
+                } else {
+                    $errorBody = 'No response';
+                    $status = null;
+                }
                 $errors[] = $errorBody;
 
                 $results[$index] = [
@@ -507,7 +517,7 @@ class FalAiService
                 ];
 
                 Log::error("FalAiService::generateParallelPayloads: Request {$index} failed", [
-                    'status' => $response ? $response->status() : null,
+                    'status' => $status,
                     'body' => $errorBody,
                     'payload' => $payload,
                 ]);

@@ -291,20 +291,20 @@ class InfluencerWizard extends Component
 
             // 4. Compose payloads with default size 768x1024
             $payloads = [];
-            $width = $modelConfig['default_size']['width'] ?? 768;
-            $height = $modelConfig['default_size']['height'] ?? 1024;
+            $imageSize = $modelConfig['default_size'] ?? 'portrait_4_3';
 
             foreach ($prompts as $index => $prompt) {
                 $payload = [
                     'prompt' => $prompt,
-                    'image_size' => [
-                        'width' => $width,
-                        'height' => $height,
-                    ],
+                    'image_size' => $imageSize,
                 ];
 
                 if ($uploadedUrl) {
-                    $payload['image_url'] = $uploadedUrl;
+                    if (str_contains($selectedModel, 'gpt-image-2') || str_contains($selectedModel, 'gpt2')) {
+                        $payload['image_urls'] = [$uploadedUrl];
+                    } else {
+                        $payload['image_url'] = $uploadedUrl;
+                    }
                 }
 
                 $payloads[] = $payload;

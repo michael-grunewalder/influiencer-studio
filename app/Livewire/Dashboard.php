@@ -266,6 +266,7 @@ class Dashboard extends Component
 
     public function generateImage(string $field): void
     {
+        $useGPT2 = ['character_sheet', 'detail_sheet'];
         $influencer = $this->selectedInfluencer;
         if (! $influencer) {
             return;
@@ -280,6 +281,10 @@ class Dashboard extends Component
             // Build prompt
             if ($field === 'character_sheet') {
                 $prompt = PromptBuilderService::buildInfluencerSheetPrompt($influencer);
+            } elseif ($field === 'closeup') {
+                $prompt = PromptBuilderService::buildCloseUpPrompt($influencer);
+            } elseif ($field === 'detail_sheet') {
+                $prompt = PromptBuilderService::buildFeatureSheetPrompt($influencer);
             } else {
                 $prompt = 'Professional turnaround sheet of the character.';
             }
@@ -301,31 +306,58 @@ class Dashboard extends Component
             }
 
             // Resolve Ideogram model config
-            $modelKey = 'ideogram';
+            $modelKey = in_array($field, $useGPT2) ? 'gpt2' : 'ideogram';
             $modelConfig = config("image_models.models.{$modelKey}");
             if (! $modelConfig) {
                 throw new \Exception('Model configuration for Ideogram not found.');
             }
 
             $selectedModel = $uploadedUrl ? $modelConfig['model_edit'] : $modelConfig['model'];
-            $width = $modelConfig['default_size']['width'] ?? 768;
-            $height = $modelConfig['default_size']['height'] ?? 1024;
+            $defaultSize = $modelConfig['default_size'] ?? 'portrait_4_3';
+            $imageSize = $defaultSize;
 
             if ($field === 'character_sheet') {
-                $width = 1280;
-                $height = 720;
+                $sizesKeys = array_keys($modelConfig['image_sizes'] ?? []);
+                if (in_array('landscape_16_9', $sizesKeys, true)) {
+                    $imageSize = 'landscape_16_9';
+                } elseif (in_array('landscape_4_3', $sizesKeys, true)) {
+                    $imageSize = 'landscape_4_3';
+                } elseif (in_array('1536x1024', $sizesKeys, true)) {
+                    $imageSize = '1536x1024';
+                } else {
+                    $found = null;
+                    foreach ($sizesKeys as $key) {
+                        if (str_contains($key, 'landscape') || str_contains($key, '1536')) {
+                            $found = $key;
+                            break;
+                        }
+                    }
+                    $imageSize = $found ?? $defaultSize;
+                }
+            } elseif ($field === 'detail_sheet') {
+                $sizesKeys = array_keys($modelConfig['image_sizes'] ?? []);
+                // 2:3 ratio is closest to portrait_16_9, 1024x1536, or custom portrait. Let's look for a strong portrait ratio.
+                if (in_array('portrait_16_9', $sizesKeys, true)) {
+                    $imageSize = 'portrait_16_9';
+                } elseif (in_array('1024x1536', $sizesKeys, true)) {
+                    $imageSize = '1024x1536';
+                } elseif (in_array('portrait_4_3', $sizesKeys, true)) {
+                    $imageSize = 'portrait_4_3';
+                }
             }
 
             $payload = [
                 'prompt' => $prompt,
-                'image_size' => [
-                    'width' => $width,
-                    'height' => $height,
-                ],
+                'image_size' => $imageSize,
+                'enable_safety_checker' => false,
             ];
 
             if ($uploadedUrl) {
-                $payload['image_url'] = $uploadedUrl;
+                if (str_contains($selectedModel, 'gpt-image-2') || str_contains($selectedModel, 'gpt2')) {
+                    $payload['image_urls'] = [$uploadedUrl];
+                } else {
+                    $payload['image_url'] = $uploadedUrl;
+                }
             }
 
             // Call FAL.AI

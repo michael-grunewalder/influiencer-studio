@@ -100,9 +100,7 @@ test('wizard uses text-to-image ideogram v4 when no reference is provided', func
         $payload = $request->data();
 
         return isset($payload['prompt']) &&
-               isset($payload['image_size']['width']) &&
-               $payload['image_size']['width'] === 768 &&
-               $payload['image_size']['height'] === 1024 &&
+               $payload['image_size'] === 'portrait_4_3' &&
                ! isset($payload['image_url']);
     });
 });
@@ -160,8 +158,7 @@ test('wizard uses image-to-image ideogram v4 when reference image is uploaded', 
         return isset($payload['prompt']) &&
                isset($payload['image_url']) &&
                $payload['image_url'] === 'https://v3.fal.media/files/uploaded-face.png' &&
-               $payload['image_size']['width'] === 768 &&
-               $payload['image_size']['height'] === 1024;
+               $payload['image_size'] === 'portrait_4_3';
     });
 });
 

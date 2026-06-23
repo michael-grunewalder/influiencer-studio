@@ -91,4 +91,70 @@ test('prompt builder generates influencer character sheet prompt', function () {
     expect($prompt)->toContain('fair skin tone');
     expect($prompt)->toContain('freckles');
     expect($prompt)->toContain('Outfit: Coastal');
+    expect($prompt)->not->toContain('Let this inform');
+});
+
+test('prompt builder generates influencer closeup prompt', function () {
+    $properties = new InfluencerProperties(
+        gender: 'female',
+        age: 25,
+        niche: ['Fashion'],
+        backstory: 'Travel and fashion model.',
+        personality: 50,
+        ethnicity: 'White',
+        skin_tone: 'Fair',
+        hair_color: 'Blonde',
+        hair_length: 'Long',
+        hair_texture: 'Straight',
+        eye_color: 'Blue',
+        build: 'Petite',
+        custom_description: 'freckles',
+        aesthetic_vibe: 'Coastal'
+    );
+
+    $influencer = new Influencer([
+        'name' => 'Emma',
+        'backstory' => 'Travel and fashion model.',
+        'properties' => $properties,
+    ]);
+
+    $prompt = PromptBuilderService::buildCloseUpPrompt($influencer);
+
+    expect($prompt)->toContain('Professional studio headshot.');
+    expect($prompt)->toContain('The subject: white, long straight blonde hair, blue eyes, fair skin tone, petite build, freckles.');
+    expect($prompt)->toContain('Shot on Phase One IQ4 150MP');
+});
+
+test('prompt builder generates influencer feature sheet prompt', function () {
+    $properties = new InfluencerProperties(
+        gender: 'female',
+        age: 25,
+        niche: ['Fashion'],
+        backstory: 'Travel and fashion model.',
+        personality: 50,
+        ethnicity: 'White',
+        skin_tone: 'Fair',
+        hair_color: 'Blonde',
+        hair_length: 'Long',
+        hair_texture: 'Straight',
+        eye_color: 'Blue',
+        build: 'Petite',
+        custom_description: 'freckles',
+        aesthetic_vibe: 'Coastal'
+    );
+
+    $influencer = new Influencer([
+        'name' => 'Emma',
+        'backstory' => 'Travel and fashion model.',
+        'properties' => $properties,
+    ]);
+
+    $prompt = PromptBuilderService::buildFeatureSheetPrompt($influencer);
+
+    expect($prompt)->toContain('Beauty model feature reference sheet.');
+    expect($prompt)->toContain('The subject: white, long straight blonde hair, blue eyes, fair skin tone, petite build, freckles.');
+    expect($prompt)->toContain('labelled "EYE"');
+    expect($prompt)->toContain('labelled "BROW"');
+    expect($prompt)->toContain('labelled "LIP"');
+    expect($prompt)->toContain('labelled "SKIN TEXTURE"');
 });

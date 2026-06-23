@@ -624,6 +624,80 @@ Constraints: no people in the background. No visible brand logos on any item. {$
     }
 
     /**
+     * Resolve the physical description string from an influencer instance or array.
+     */
+    private static function resolvePhysicalDesc(array|object $influencer): string
+    {
+        $props = [];
+        if ($influencer instanceof Model) {
+            if (isset($influencer->properties)) {
+                $props = $influencer->properties;
+            }
+        } elseif (is_object($influencer)) {
+            $props = $influencer->properties ?? $influencer;
+        } else {
+            $props = $influencer['properties'] ?? $influencer;
+        }
+
+        if ($props instanceof InfluencerProperties) {
+            $propsArray = $props->toArray();
+        } else {
+            $propsArray = (array) $props;
+        }
+
+        $physicalDesc = $propsArray['physical_description'] ?? $propsArray['physicalDesc'] ?? '';
+        if (empty($physicalDesc)) {
+            $physicalDesc = self::buildPhysicalDescString($propsArray);
+        }
+
+        return $physicalDesc;
+    }
+
+    /**
+     * Build the professional studio headshot prompt.
+     */
+    public static function buildCloseUpPrompt(array|object $influencer): string
+    {
+        $physicalDesc = self::resolvePhysicalDesc($influencer);
+        $phys = (! empty($physicalDesc)) ? "The subject: {$physicalDesc}. " : '';
+
+        return "Professional studio headshot. Subject facing directly forward, eyes looking straight into the camera lens. Framed from shoulders up — head, neck, and upper chest visible. Clean seamless pure white backdrop, soft gradient toward very light grey at edges, no texture, no cast shadows on background.
+
+{$phys}Soft diffused studio lighting: two large softboxes at 45-degree angles producing soft, even, shadow-free illumination across the face. Subtle catchlights visible in both eyes. No harsh under-nose or chin shadows. Skin tone reproduced accurately — natural pore texture, subtle imperfections visible, zero retouching.
+
+Replicate every physical detail from the reference image exactly: facial bone structure, unique facial features and natural asymmetries, precise skin tone, freckles, moles, iris color and detail, eyebrow shape, lip shape, hair color, texture and natural fall. The subject must be unmistakably the same individual.
+
+Subject standing straight, head completely level, facing dead-on into the camera — no tilt, no turn, no pose. Eyes looking directly into the lens. Neutral expression, mouth relaxed and closed. No modelling, no attitude, no special pose whatsoever. Identical to a casting reference or identity card photo.
+
+Shot on Phase One IQ4 150MP, 85mm portrait lens, f/2.8, studio strobe. Photorealistic, ultra-sharp facial detail, RAW photograph quality. Studio identity reference portrait.";
+    }
+
+    /**
+     * Build the beauty model feature reference sheet prompt.
+     */
+    public static function buildFeatureSheetPrompt(array|object $influencer): string
+    {
+        $physicalDesc = self::resolvePhysicalDesc($influencer);
+        $phys = (! empty($physicalDesc)) ? "The subject: {$physicalDesc}. " : '';
+
+        return "Beauty model feature reference sheet. {$phys}Pure white background throughout. Clinical reference card layout — like a casting or makeup artist reference sheet printed on white paper. Bold black uppercase sans-serif labels above each panel. Clear white gutters between every panel and white margins around the outside.
+
+Layout — 4 rows stacked top to bottom:
+Row 1 (full width): one wide panel labelled \"EYE\" — extreme macro close-up centered tightly on both irises. The irises fill the majority of the frame. Shows exact iris color, pattern, and detail. Lashes visible at edges but irises are the dominant subject.
+Row 2 (full width): one wide panel labelled \"BROW\" — close-up from hairline to mid-nose showing exact brow shape, arch, thickness, hair direction, forehead skin.
+Row 3 (two equal side-by-side panels):
+  Left — labelled \"LIP\": close-up from nose base to chin showing exact lip shape, cupid's bow, natural lip color.
+  Right — labelled \"SKIN TEXTURE\": macro close-up of cheek skin showing pores, freckles, natural skin detail, zero retouching.
+Row 4 (two equal side-by-side panels):
+  Left — labelled \"HAIR TEXTURE\": close-up of hair strands showing exact color, shine, texture, wave or curl pattern.
+  Right — labelled \"HANDS\": close-up of hand showing nail shape, length, nail color or nail art, knuckle skin detail.
+
+Replicate the reference person's exact features in every panel: precise skin tone, freckle placement, hair color, lip shape, brow arch. Zero beauty retouching — raw photographic detail. White space clearly visible between all panels.
+
+Photorealistic RAW photograph quality, ultra-sharp macro detail in each panel. Shot on Hasselblad 100mm macro lens.";
+    }
+
+    /**
      * Build the professional character turnaround sheet prompt.
      */
     public static function buildInfluencerSheetPrompt(array|object $influencer): string
@@ -651,10 +725,7 @@ Constraints: no people in the background. No visible brand logos on any item. {$
             $propsArray = (array) $props;
         }
 
-        $physicalDesc = $propsArray['physical_description'] ?? $propsArray['physicalDesc'] ?? '';
-        if (empty($physicalDesc)) {
-            $physicalDesc = self::buildPhysicalDescString($propsArray);
-        }
+        $physicalDesc = self::resolvePhysicalDesc($influencer);
 
         $clothingStyle = $propsArray['aesthetic_vibe'] ?? $propsArray['aestheticVibe'] ?? '';
         if (empty($clothingStyle) && isset($propsArray['clothingStyle'])) {
@@ -668,7 +739,7 @@ Constraints: no people in the background. No visible brand logos on any item. {$
         $ctx = '';
         if ($backstory !== '') {
             $slicedBackstory = mb_substr($backstory, 0, 300);
-            $ctx = "Character background: {$slicedBackstory}. Let this inform their physique, presence, and energy — e.g. a personal trainer should look visibly athletic and fit, a gamer may look relaxed and casual, a CEO projects confidence. ";
+            $ctx = "Character background: {$slicedBackstory}. ";
         }
 
         return "Professional full-body character turnaround sheet. Pure white background, no background elements whatsoever. Soft neutral studio lighting, perfectly flat and even across all four panels — no shadows, no color cast, no vignette. Neutral facial expression, neutral pose.

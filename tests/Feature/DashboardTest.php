@@ -5,6 +5,7 @@ use App\Livewire\Dashboard;
 use App\Models\Influencer;
 use App\Models\Team;
 use App\Models\User;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
@@ -104,6 +105,18 @@ test('user can generate and download sheet images', function () {
         ->set('selectedId', $influencer->id)
         ->call('generateImage', 'character_sheet')
         ->assertHasNoErrors();
+
+    Http::assertSent(function (Request $request) {
+        if ($request->url() !== 'https://fal.run/openai/gpt-image-2/edit') {
+            return false;
+        }
+        $payload = $request->data();
+
+        return isset($payload['image_urls']) &&
+               is_array($payload['image_urls']) &&
+               count($payload['image_urls']) === 1 &&
+               ! isset($payload['image_url']);
+    });
 
     $influencer->refresh();
     $sheetUrl = $influencer->properties->character_sheet;
