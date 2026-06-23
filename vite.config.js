@@ -12,13 +12,19 @@ export default defineConfig({
         }),
         tailwindcss(),
     ],
+    resolve: {
+        alias: {
+            '@': '/resources/js',
+        },
+    },
     server: {
-        // The following line is require until the release of https://github.com/vitejs/vite/pull/19241
-        cors: { origin },
-        // ----------------
-        host: '0.0.0.0',
+        host: origin ? '0.0.0.0' : 'localhost',
         port: port,
-        origin: `${origin}:${port}`,
-        strictPort: true
+        strictPort: true,
+        ...(origin ? {
+            // The following line is required until the release of https://github.com/vitejs/vite/pull/19241
+            cors: { origin },
+            origin: `${origin}:${port}`,
+        } : {}),
     },
 });

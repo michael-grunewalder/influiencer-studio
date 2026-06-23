@@ -22,6 +22,10 @@ class FalAiService
         $apiKey = $resolved['apiKey'];
         $shouldCharge = $resolved['shouldCharge'];
 
+        if ($apiKey !== 'bearny-codes') {
+            @set_time_limit(240);
+        }
+
         if ($apiKey === 'bearny-codes' && app()->environment('local', 'testing')) {
             $url = $this->generateDemoImage();
 
@@ -415,6 +419,10 @@ class FalAiService
         $resolved = $this->resolveApiKeyAndCharge($team, $count);
         $apiKey = $resolved['apiKey'];
         $shouldCharge = $resolved['shouldCharge'];
+
+        if ($apiKey !== 'bearny-codes') {
+            @set_time_limit(240);
+        }
 
         // Mask key for log security
         $maskedKey = strlen($apiKey) <= 8 ? $apiKey : substr($apiKey, 0, 8).str_repeat('*', strlen($apiKey) - 8);
