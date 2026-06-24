@@ -4,13 +4,19 @@ use App\Data\InfluencerProperties;
 use App\Livewire\Dashboard;
 use App\Models\Influencer;
 use App\Models\Outfit;
+use App\Models\Team;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
 test('outfits can be generated for an influencer on dashboard', function () {
+    $team = Team::create(['name' => 'Test Team']);
     $user = User::factory()->create();
+    $user->teams()->attach($team->id);
+    session(['active_team_id' => $team->id]);
+
     $influencer = Influencer::create([
+        'team_id' => $team->id,
         'name' => 'Elena Drake',
         'avatar' => 'https://picsum.photos/720/1280',
         'properties' => new InfluencerProperties(
@@ -44,8 +50,13 @@ test('outfits can be generated for an influencer on dashboard', function () {
 });
 
 test('outfits can be manually named and saved', function () {
+    $team = Team::create(['name' => 'Test Team']);
     $user = User::factory()->create();
+    $user->teams()->attach($team->id);
+    session(['active_team_id' => $team->id]);
+
     $influencer = Influencer::create([
+        'team_id' => $team->id,
         'name' => 'Elena Drake',
         'avatar' => 'https://picsum.photos/720/1280',
         'properties' => new InfluencerProperties(
@@ -79,8 +90,13 @@ test('outfits can be manually named and saved', function () {
 });
 
 test('user can select an outfit to load it into form and show overlay', function () {
+    $team = Team::create(['name' => 'Test Team']);
     $user = User::factory()->create();
+    $user->teams()->attach($team->id);
+    session(['active_team_id' => $team->id]);
+
     $influencer = Influencer::create([
+        'team_id' => $team->id,
         'name' => 'Elena Drake',
         'avatar' => 'https://picsum.photos/720/1280',
         'properties' => new InfluencerProperties(
@@ -112,8 +128,13 @@ test('user can select an outfit to load it into form and show overlay', function
 });
 
 test('user can delete an outfit', function () {
+    $team = Team::create(['name' => 'Test Team']);
     $user = User::factory()->create();
+    $user->teams()->attach($team->id);
+    session(['active_team_id' => $team->id]);
+
     $influencer = Influencer::create([
+        'team_id' => $team->id,
         'name' => 'Elena Drake',
         'avatar' => 'https://picsum.photos/720/1280',
         'properties' => new InfluencerProperties(

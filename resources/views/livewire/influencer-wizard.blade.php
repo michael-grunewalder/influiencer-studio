@@ -123,26 +123,28 @@
         </div>
 
         {{-- Glowing Top Promo Banners --}}
-        @if($step <= 4)
+        @if($step <= 4 && (! $this->activeTeam?->fal_api_key || ! $this->activeTeam?->claude_api_key))
             <div class="w-full max-w-2xl flex flex-col gap-3 mb-8 px-4">
-                <div class="alert alert-info shadow-sm rounded-2xl p-4 flex items-center justify-between gap-4 border border-info/20 bg-info/5">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-info text-info-content flex items-center justify-center shadow">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                            </svg>
+                @if(! $this->activeTeam?->fal_api_key)
+                    <div class="alert alert-info shadow-sm rounded-2xl p-4 flex items-center justify-between gap-4 border border-info/20 bg-info/5">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-info text-info-content flex items-center justify-center shadow">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                </svg>
+                            </div>
+                            <div class="text-left">
+                                <h4 class="font-extrabold text-sm text-info tracking-wide uppercase">{{ __('dialogs.api.fal.label') }}</h4>
+                                <p class="text-xs text-slate-500 mt-0.5">{{ __('dialogs.api.fal.description') }}</p>
+                            </div>
                         </div>
-                        <div class="text-left">
-                            <h4 class="font-extrabold text-sm text-info tracking-wide uppercase">Connect to Higgsfield</h4>
-                            <p class="text-xs text-slate-500 mt-0.5">Integrate video generation capabilities directly.</p>
-                        </div>
+                        <button type="button" wire:click="openConnectModal" class="btn btn-sm btn-info text-info-content font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-sm">
+                            {{__('dialogs.api.fal.button')}} <span class="font-mono">→</span>
+                        </button>
                     </div>
-                    <button class="btn btn-sm btn-info text-info-content font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-sm">
-                        Connect <span class="font-mono">→</span>
-                    </button>
-                </div>
+                @endif
 
-                @if($step === 1)
+                @if(! $this->activeTeam?->claude_api_key)
                     <div class="alert alert-warning shadow-sm rounded-2xl p-4 flex items-center justify-between gap-4 border border-warning/20 bg-warning/5">
                         <div class="flex items-center gap-3">
                             <div class="w-10 h-10 rounded-xl bg-warning text-warning-content flex items-center justify-center shadow">
@@ -151,12 +153,12 @@
                                 </svg>
                             </div>
                             <div class="text-left">
-                                <h4 class="font-extrabold text-sm text-warning tracking-wide uppercase">Connect Claude for smarter prompts</h4>
-                                <p class="text-xs text-slate-500 mt-0.5">Let AI enhance your backstory and visual traits automatically.</p>
+                                <h4 class="font-extrabold text-sm text-warning tracking-wide uppercase">{{ __('dialogs.api.claude.label') }}</h4>
+                                <p class="text-xs text-slate-500 mt-0.5">{{ __('dialogs.api.claude.description') }}</p>
                             </div>
                         </div>
-                        <button class="btn btn-sm btn-warning text-warning-content font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-sm">
-                            Connect <span class="font-mono">→</span>
+                        <button type="button" wire:click="openConnectModal" class="btn btn-sm btn-warning text-warning-content font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-sm">
+                            {{ __('dialogs.api.claude.button') }} <span class="font-mono">→</span>
                         </button>
                     </div>
                 @endif
@@ -704,5 +706,18 @@
     <footer class="max-w-7xl w-full mx-auto text-center text-xs text-slate-500 px-4 mt-8 relative z-20">
         <p>&copy; {{ date('Y') }} Influencer Studio. All rights reserved. Powered by Higgsfield & Claude.</p>
     </footer>
+
+    <!-- API Keys Modal -->
+    <x-modal wire:model="showConnectModal" title="API-Schlüssel verbinden">
+        <x-form wire:submit="saveApiKeys">
+            <x-input label="FAL.AI API Key" wire:model="fal_api_key" type="password" placeholder="fal_..." />
+            <x-input label="Claude API Key" wire:model="claude_api_key" type="password" placeholder="sk-ant-..." />
+
+            <x-slot:actions>
+                <x-button label="Abbrechen" wire:click="$set('showConnectModal', false)" class="btn-ghost" />
+                <x-button label="Speichern" type="submit" class="btn-primary font-bold rounded-xl px-5" spinner="saveApiKeys" />
+            </x-slot:actions>
+        </x-form>
+    </x-modal>
 
 </div>

@@ -108,6 +108,9 @@ class Dashboard extends Component
     public function updatedSelectedTeamId(string $value): void
     {
         session(['active_team_id' => $value]);
+        if (auth()->check()) {
+            auth()->user()->update(['last_active_team_id' => $value]);
+        }
         $this->dispatch('credits-updated');
         $first = $this->influencers->first();
         if ($first) {
@@ -141,11 +144,13 @@ class Dashboard extends Component
     #[Computed]
     public function selectedInfluencer()
     {
-        if (! $this->selectedId) {
+        if (! $this->selectedId || ! $this->selectedTeamId) {
             return null;
         }
 
-        return Influencer::find($this->selectedId);
+        return Influencer::where('id', $this->selectedId)
+            ->where('team_id', $this->selectedTeamId)
+            ->first();
     }
 
     public function selectInfluencer(string $id): void
@@ -178,14 +183,17 @@ class Dashboard extends Component
 
     public function deleteInfluencer(string $id): void
     {
-        $influencer = Influencer::find($id);
+        $influencer = Influencer::where('id', $id)
+            ->where('team_id', $this->selectedTeamId)
+            ->first();
+
         if ($influencer) {
             $influencer->delete();
             Toaster::success(__('Influencer gelöscht.'));
         }
 
         if ($this->selectedId === $id) {
-            $next = Influencer::first();
+            $next = Influencer::where('team_id', $this->selectedTeamId)->latest()->first();
             if ($next) {
                 $this->selectInfluencer($next->id);
             } else {
@@ -289,6 +297,8 @@ class Dashboard extends Component
                 $prompt = 'Professional turnaround sheet of the character.';
             }
 
+            PromptBuilderService::logPrompt($prompt, null, 'Dashboard: '.ucfirst($field));
+
             // Resolve avatar as reference image
             $uploadedUrl = null;
             if ($influencer->avatar) {
@@ -306,8 +316,8 @@ class Dashboard extends Component
             }
 
             // Resolve Ideogram model config
-            //$modelKey = in_array($field, $useGPT2) ? 'gpt2' : 'ideogram';
-            $modelKey = ($field !==  'avatar') ? 'gpt2' : 'ideogram';
+            // $modelKey = in_array($field, $useGPT2) ? 'gpt2' : 'ideogram';
+            $modelKey = ($field !== 'avatar') ? 'gpt2' : 'ideogram';
             $modelConfig = config("image_models.models.{$modelKey}");
             if (! $modelConfig) {
                 throw new \Exception('Model configuration for Ideogram not found.');
@@ -688,7 +698,12 @@ class Dashboard extends Component
 
     public function selectOutfit(string $id): void
     {
-        $outfit = Outfit::find($id);
+        $influencer = $this->selectedInfluencer;
+        if (! $influencer) {
+            return;
+        }
+
+        $outfit = $influencer->outfits()->find($id);
         if ($outfit) {
             $this->outfit_top = $outfit->top ?? '';
             $this->outfit_bottom = $outfit->bottom ?? '';
@@ -701,7 +716,12 @@ class Dashboard extends Component
 
     public function deleteOutfit(string $id): void
     {
-        $outfit = Outfit::find($id);
+        $influencer = $this->selectedInfluencer;
+        if (! $influencer) {
+            return;
+        }
+
+        $outfit = $influencer->outfits()->find($id);
         if ($outfit) {
             $outfit->delete();
             Toaster::success(__('Outfit gelöscht.'));

@@ -110,6 +110,8 @@ test('influencer wizard can progress and create an influencer with credit system
         ->call('finishGeneration')
         ->assertSet('is_done', true);
 
+    expect($test->get('generated_avatar'))->toContain('/storage/teams/')->toContain('/avatar.png')->toContain('signature=');
+
     // Assert database has the influencer with local private avatar URL
     $influencer = Influencer::where('name', 'Elena Sterling')->first();
     expect($influencer->avatar)->toContain('/storage/teams/')->toContain('/avatar.png')->toContain('signature=');
@@ -132,4 +134,30 @@ test('influencer wizard can progress and create an influencer with credit system
     expect($influencer->properties->age)->toBe(26);
     expect($influencer->properties->niche)->toBe(['Fashion', 'Beauty']);
     expect($influencer->properties->hair_color)->toBe('Brunette');
+});
+
+test('user can update API keys on influencer wizard and load Fal.ai balance', function () {
+    $user = User::factory()->create();
+    $team = Team::create(['name' => 'Test Team']);
+    $user->teams()->attach($team);
+    session(['active_team_id' => $team->id]);
+
+    Http::fake([
+        'https://fal.run/credits/balance' => Http::response(['balance' => 42.50], 200),
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(InfluencerWizard::class)
+        ->assertSet('showConnectModal', false)
+        ->call('openConnectModal')
+        ->assertSet('showConnectModal', true)
+        ->set('fal_api_key', 'fal_12345')
+        ->set('claude_api_key', 'sk-ant-12345')
+        ->call('saveApiKeys')
+        ->assertSet('showConnectModal', false)
+        ->assertHasNoErrors();
+
+    $team->refresh();
+    expect($team->fal_api_key)->toBe('fal_12345');
+    expect($team->claude_api_key)->toBe('sk-ant-12345');
 });

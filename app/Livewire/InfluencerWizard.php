@@ -9,7 +9,9 @@ use App\Services\FalAiService;
 use App\Services\PromptBuilderService;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -20,6 +22,59 @@ class InfluencerWizard extends Component
     use WithFileUploads;
 
     public int $step = 1;
+
+    public string $fal_api_key = '';
+
+    public string $claude_api_key = '';
+
+    public bool $showConnectModal = false;
+
+    #[Computed]
+    public function activeTeam(): ?Team
+    {
+        return $this->getActiveTeam();
+    }
+
+    public function openConnectModal(): void
+    {
+        $team = $this->activeTeam;
+        if ($team) {
+            $this->fal_api_key = $team->fal_api_key ?? '';
+            $this->claude_api_key = $team->claude_api_key ?? '';
+        }
+        $this->showConnectModal = true;
+    }
+
+    public function saveApiKeys(): void
+    {
+        $this->validate([
+            'fal_api_key' => 'nullable|string|max:255',
+            'claude_api_key' => 'nullable|string|max:255',
+        ]);
+
+        $team = $this->activeTeam;
+        if ($team) {
+            $team->update([
+                'fal_api_key' => $this->fal_api_key ?: null,
+                'claude_api_key' => $this->claude_api_key ?: null,
+            ]);
+
+            if ($this->fal_api_key) {
+                try {
+                    $service = app(FalAiService::class);
+                    $service->getAccountBalance($this->fal_api_key);
+                    $this->dispatch('credits-updated');
+                    Toaster::success(__('API-Schlüssel gespeichert und Guthaben geladen!'));
+                } catch (\Throwable $e) {
+                    Toaster::error(__('API-Schlüssel gespeichert, aber Guthaben konnte nicht geladen werden.'));
+                }
+            } else {
+                Toaster::success(__('API-Schlüssel erfolgreich gespeichert!'));
+            }
+        }
+
+        $this->showConnectModal = false;
+    }
 
     // Step 1: Basics
     public string $name = '';
@@ -294,6 +349,7 @@ class InfluencerWizard extends Component
             $imageSize = $modelConfig['default_size'] ?? 'portrait_4_3';
 
             foreach ($prompts as $index => $prompt) {
+                PromptBuilderService::logPrompt($prompt, null, 'Wizard Variation '.($index + 1));
                 $payload = [
                     'prompt' => $prompt,
                     'image_size' => $imageSize,
@@ -476,7 +532,17 @@ class InfluencerWizard extends Component
         $ext = pathinfo(parse_url($selectedAvatar, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'png';
         $destPath = "teams/{$teamId}/influencers/{$influencerId}/avatar.{$ext}";
         $localAvatarUrl = app(FalAiService::class)->downloadAndRegister($team, $selectedAvatar, 'avatar', $destPath);
-        $this->generated_avatar = $localAvatarUrl;
+
+        if (str_starts_with($localAvatarUrl, '/storage/teams/')) {
+            $path = substr($localAvatarUrl, strlen('/storage/'));
+            try {
+                $this->generated_avatar = Storage::disk('local')->temporaryUrl($path, now()->addDay());
+            } catch (\Throwable $e) {
+                $this->generated_avatar = $localAvatarUrl;
+            }
+        } else {
+            $this->generated_avatar = $localAvatarUrl;
+        }
 
         $properties = new InfluencerProperties(
             gender: $this->gender,

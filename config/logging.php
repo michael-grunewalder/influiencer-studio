@@ -20,6 +20,8 @@ return [
 
     'default' => env('LOG_CHANNEL', 'stack'),
 
+    'level' => env('LOG_LEVEL', 'debug'),
+
     /*
     |--------------------------------------------------------------------------
     | Deprecations Log Channel

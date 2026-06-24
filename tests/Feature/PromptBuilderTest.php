@@ -3,6 +3,7 @@
 use App\Data\InfluencerProperties;
 use App\Models\Influencer;
 use App\Services\PromptBuilderService;
+use Illuminate\Support\Facades\Log;
 
 test('prompt builder builds physical description string correctly', function () {
     $data = [
@@ -157,4 +158,106 @@ test('prompt builder generates influencer feature sheet prompt', function () {
     expect($prompt)->toContain('labelled "BROW"');
     expect($prompt)->toContain('labelled "LIP"');
     expect($prompt)->toContain('labelled "SKIN TEXTURE"');
+});
+
+test('logPrompt writes to debug log if app debug is true and log level is debug', function () {
+    config([
+        'app.debug' => true,
+        'logging.level' => 'debug',
+    ]);
+
+    Log::shouldReceive('debug')
+        ->once()
+        ->with("[Test Label] Prompt:\nHello World");
+
+    PromptBuilderService::logPrompt('Hello World', null, 'Test Label');
+});
+
+test('logPrompt writes both base and enhanced prompts if base prompt is provided', function () {
+    config([
+        'app.debug' => true,
+        'logging.level' => 'debug',
+    ]);
+
+    Log::shouldReceive('debug')
+        ->once()
+        ->with("[Test Label] Base Prompt:\nBase Hello");
+
+    Log::shouldReceive('debug')
+        ->once()
+        ->with("[Test Label] Enhanced Prompt:\nEnhanced Hello");
+
+    PromptBuilderService::logPrompt('Enhanced Hello', 'Base Hello', 'Test Label');
+});
+
+test('logPrompt does not write to debug log if app debug is false', function () {
+    config([
+        'app.debug' => false,
+        'logging.level' => 'debug',
+    ]);
+
+    Log::shouldReceive('debug')->never();
+
+    PromptBuilderService::logPrompt('Hello World', null, 'Test Label');
+});
+
+test('logPrompt does not write to debug log if log level is not debug', function () {
+    config([
+        'app.debug' => true,
+        'logging.level' => 'info',
+    ]);
+
+    Log::shouldReceive('debug')->never();
+
+    PromptBuilderService::logPrompt('Hello World', null, 'Test Label');
+});
+
+test('prompt builder generates photo studio prompt correctly', function () {
+    $properties = new InfluencerProperties(
+        gender: 'female',
+        age: 25,
+        niche: ['Fashion'],
+        backstory: 'Travel and fashion model.',
+        personality: 50,
+        ethnicity: 'White',
+        skin_tone: 'Fair',
+        hair_color: 'Blonde',
+        hair_length: 'Long',
+        hair_texture: 'Straight',
+        eye_color: 'Blue',
+        build: 'Petite',
+        custom_description: 'freckles',
+        aesthetic_vibe: 'Coastal'
+    );
+
+    $influencer = new Influencer([
+        'name' => 'Emma',
+        'backstory' => 'Travel and fashion model.',
+        'properties' => $properties,
+    ]);
+
+    $args = [
+        'influencer' => $influencer,
+        'location' => 'coffee-shop',
+        'timeOfDay' => 'golden-hour',
+        'pose' => 'front',
+        'vibe' => 'editorial',
+        'stance' => 'standing',
+        'aspectRatio' => '9:16',
+        'expression' => 'smiling',
+        'gaze' => 'at-camera',
+        'poseTag' => '@image1',
+        'faceTag' => '@image2',
+        'wardrobeTag' => '@image3',
+    ];
+
+    $prompt = PromptBuilderService::buildPhotoStudioPrompt($args);
+
+    expect($prompt)->toContain('Modify the base image @image1 to show a Editorial photo of the subject from @image2');
+    expect($prompt)->toContain('wearing the complete outfit from @image3');
+    expect($prompt)->toContain('Subject is standing upright on both feet');
+    expect($prompt)->toContain('Facing the camera directly, confident and composed.');
+    expect($prompt)->toContain('Expression: a genuine soft smile');
+    expect($prompt)->toContain('The location is a coffee shop interior.');
+    expect($prompt)->toContain('golden hour');
 });
