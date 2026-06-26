@@ -199,7 +199,7 @@
 
             {{-- Location Previews Grid --}}
             @if($rightMode === 'location')
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-h-[340px] overflow-y-auto pr-1">
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 overflow-y-auto pr-1">
                     @foreach(['coffee-shop', 'city-street', 'beach', 'rooftop', 'bedroom', 'bathroom', 'mall', 'gym', 'park', 'restaurant', 'hotel', 'studio'] as $loc)
                         <div wire:key="loc-card-{{ $loc }}" wire:click="selectLocation('{{ $loc }}')" class="relative border-2 rounded-2xl overflow-hidden cursor-pointer group aspect-[4/3] flex items-center justify-center transition-all hover:scale-[1.02] {{ $location === $loc ? 'border-primary shadow-md shadow-primary/15' : 'border-base-300' }}">
                             <img src="{{ $this->getLocationPreviewUrl($loc, $timeOfDay) }}" alt="{{ $loc }}" class="w-full h-full object-cover transition-transform group-hover:scale-105" />
@@ -220,7 +220,7 @@
 
             {{-- Pose Previews Grid --}}
             @if($rightMode === 'pose')
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-h-[340px] overflow-y-auto pr-1">
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 overflow-y-auto pr-1">
                     @foreach($this->getAvailablePoses() as $p)
                         <div wire:key="pose-card-{{ $p['id'] }}" wire:click="selectPose('{{ $p['id'] }}')" class="relative border-2 rounded-2xl overflow-hidden cursor-pointer group aspect-[3/4] flex items-center justify-center transition-all hover:scale-[1.02] {{ $pose === $p['id'] ? 'border-primary shadow-md shadow-primary/15' : 'border-base-300' }}">
                             <img src="{{ $this->getPosePreviewUrl($p['id']) }}" alt="{{ $p['label'] }}" class="w-full h-full object-cover transition-transform group-hover:scale-105" />
