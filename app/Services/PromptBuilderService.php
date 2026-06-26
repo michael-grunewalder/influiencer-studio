@@ -794,6 +794,8 @@ Shot on Hasselblad X2D 100C, photorealistic, ultra-sharp micro detail, RAW photo
         $closeUp1Tag = $args['closeUp1Tag'] ?? null;
         $closeUp2Tag = $args['closeUp2Tag'] ?? null;
         $poseTag = $args['poseTag'] ?? null;
+        $locationText = $args['locationText'] ?? null;
+        $poseText = $args['poseText'] ?? null;
         $variationIdx = $args['variationIdx'] ?? null;
 
         $isSitting = $stance === 'sitting';
@@ -913,16 +915,18 @@ Shot on Hasselblad X2D 100C, photorealistic, ultra-sharp micro detail, RAW photo
             'seated-lean' => 'Seated and leaning slightly forward, relaxed and engaged.',
         ];
 
+        $trimmedPoseText = trim($poseText ?? '');
         $basePose = '';
-        if ($pose === 'candid') {
+        if (! empty($trimmedPoseText)) {
+            $basePose = $trimmedPoseText;
+        } elseif ($pose === 'candid') {
             $idx = $variationIdx !== null ? intval($variationIdx) : rand(0, count($candidActions) - 1);
             $action = $candidActions[$idx % count($candidActions)];
             $basePose = "Candid pose — {$action}. Unaware of the camera.";
-        } elseif (isset($poseMap[$pose]) && $poseMap[$pose] !== null) {
+        } elseif ($pose && isset($poseMap[$pose]) && $poseMap[$pose] !== null) {
             $basePose = $poseMap[$pose];
         } else {
-            $trimmedPose = trim($pose);
-            $basePose = ! empty($trimmedPose) ? $trimmedPose : $poseMap['front'];
+            $basePose = 'relaxed natural posture';
         }
 
         $stancePrefix = $isSitting
@@ -1066,11 +1070,32 @@ Shot on Hasselblad X2D 100C, photorealistic, ultra-sharp micro detail, RAW photo
             ],
         ];
 
+        $trimmedLocText = trim($locationText ?? '');
         $scene = '';
-        if (isset($sceneVariants[$location])) {
-            $variants = $sceneVariants[$location];
-            $vIdx = $variationIdx !== null ? intval($variationIdx) : rand(0, count($variants) - 1);
-            $scene = $variants[$vIdx % count($variants)];
+        $locationLabel = '';
+        if (! empty($trimmedLocText)) {
+            $locationLabel = 'The location is '.trim($trimmedLocText).'.';
+        } else {
+            if ($location && isset($sceneVariants[$location])) {
+                $variants = $sceneVariants[$location];
+                $vIdx = $variationIdx !== null ? intval($variationIdx) : rand(0, count($variants) - 1);
+                $scene = $variants[$vIdx % count($variants)];
+            }
+            $locationLabelMap = [
+                'coffee-shop' => 'The location is a coffee shop interior.',
+                'city-street' => 'The location is an outdoor city street.',
+                'beach' => 'The location is a beach outdoors.',
+                'rooftop' => 'The location is a rooftop terrace.',
+                'bedroom' => 'The location is a private bedroom interior.',
+                'bathroom' => 'The location is a bathroom — this is a mirror selfie.',
+                'mall' => 'The location is inside a shopping mall.',
+                'gym' => 'The location is inside a gym.',
+                'park' => 'The location is an outdoor park.',
+                'restaurant' => 'The location is inside a restaurant.',
+                'hotel' => 'The location is a hotel room interior.',
+                'studio' => 'The location is a photography studio.',
+            ];
+            $locationLabel = $locationLabelMap[$location] ?? ($location && ! empty(trim($location)) ? 'The location is '.trim($location).'.' : '');
         }
 
         // ── Background people ───
@@ -1084,23 +1109,6 @@ Shot on Hasselblad X2D 100C, photorealistic, ultra-sharp micro detail, RAW photo
         $peopleLine = ($location === 'bathroom' || $location === 'bedroom' || $location === 'hotel')
             ? 'No other people in frame.'
             : $backgroundPeople[$variationIdx !== null ? (intval($variationIdx) % count($backgroundPeople)) : 0];
-
-        // ── Location label + time atmosphere + lighting ───
-        $locationLabelMap = [
-            'coffee-shop' => 'The location is a coffee shop interior.',
-            'city-street' => 'The location is an outdoor city street.',
-            'beach' => 'The location is a beach outdoors.',
-            'rooftop' => 'The location is a rooftop terrace.',
-            'bedroom' => 'The location is a private bedroom interior.',
-            'bathroom' => 'The location is a bathroom — this is a mirror selfie.',
-            'mall' => 'The location is inside a shopping mall.',
-            'gym' => 'The location is inside a gym.',
-            'park' => 'The location is an outdoor park.',
-            'restaurant' => 'The location is inside a restaurant.',
-            'hotel' => 'The location is a hotel room interior.',
-            'studio' => 'The location is a photography studio.',
-        ];
-        $locationLabel = $locationLabelMap[$location] ?? (! empty(trim($location)) ? 'The location is '.trim($location).'.' : '');
 
         $timeAtmoMap = [
             'morning' => 'Time of day: early morning — the sun has just risen, low on the horizon, the world is quiet and calm, air is cool and still.',

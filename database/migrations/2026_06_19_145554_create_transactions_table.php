@@ -15,9 +15,9 @@ return new class extends Migration
             $table->ulid('id')->primary();
             $table->foreignUlid('user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignUlid('team_id')->nullable()->constrained('teams')->cascadeOnDelete();
-            $table->string('type'); // topup, transfer, spending
-            $table->decimal('amount', 8, 2);
-            $table->string('description');
+            $table->string('type')->default('spending'); // topup, transfer, spending
+            $table->decimal('amount', 8, 2)->default(0.00);
+            $table->string('description')->default(0.00);
             $table->timestamps();
         });
     }

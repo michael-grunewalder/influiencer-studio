@@ -92,6 +92,16 @@
                 <span class="block text-[10px] font-extrabold text-slate-400 tracking-wider uppercase">Prompt Overrides & Props</span>
 
                 <div class="space-y-1.5">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase">Custom Location Description</label>
+                    <textarea wire:model.live="locationText" rows="2" placeholder="Describe background/setting details if not using a location preset..." class="textarea textarea-sm textarea-bordered w-full rounded-xl text-xs bg-base-200 leading-normal resize-none focus:outline-none focus:border-primary"></textarea>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase">Custom Pose Description</label>
+                    <textarea wire:model.live="poseText" rows="2" placeholder="Describe body posture, stance, and camera framing details..." class="textarea textarea-sm textarea-bordered w-full rounded-xl text-xs bg-base-200 leading-normal resize-none focus:outline-none focus:border-primary"></textarea>
+                </div>
+
+                <div class="space-y-1.5">
                     <label class="block text-[10px] font-bold text-slate-500 uppercase">Custom Outfit Text</label>
                     <textarea wire:model="wardrobeText" rows="2" placeholder="Describe clothing details if not using a wardrobe preset..." class="textarea textarea-sm textarea-bordered w-full rounded-xl text-xs bg-base-200 leading-normal resize-none focus:outline-none focus:border-primary"></textarea>
                 </div>
@@ -177,6 +187,21 @@
     {{-- Center Panel: Previews, Outputs & Gallery (xl:col-span-8) --}}
     <div class="xl:col-span-8 space-y-6 flex flex-col h-full overflow-y-auto">
 
+        @if($reUseAssetId)
+            <div class="alert alert-info rounded-3xl flex justify-between items-center py-2.5 px-4 shadow-sm border border-info/30">
+                <div class="flex items-center gap-3">
+                    <span class="text-lg">📸</span>
+                    <div class="text-left">
+                        <p class="text-xs font-bold leading-tight">Re-using Reference Photo</p>
+                        <p class="text-[10px] text-slate-500">The selected photo will be used as the pose and composition reference.</p>
+                    </div>
+                </div>
+                <button type="button" wire:click="clearReUse" class="btn btn-xs btn-outline btn-info rounded-lg">
+                    Clear Reference
+                </button>
+            </div>
+        @endif
+
         {{-- Top Interactive Previews Section --}}
         <div class="card bg-base-100 border border-base-300 rounded-3xl p-5 md:p-6 shadow-sm">
             <div class="flex justify-between items-center pb-3 border-b border-base-200 mb-4">
@@ -190,9 +215,9 @@
                 </div>
                 <div class="text-[10px] text-slate-500 font-extrabold uppercase tracking-wide">
                     @if($rightMode === 'location')
-                        Selected: <span class="text-primary">{{ str_replace('-', ' ', $location) }}</span>
+                        Selected: <span class="text-primary">{{ $location ? str_replace('-', ' ', $location) : 'None (Custom)' }}</span>
                     @else
-                        Selected: <span class="text-primary">{{ str_replace('_', ' ', $pose) }}</span>
+                        Selected: <span class="text-primary">{{ $pose ? str_replace('_', ' ', $pose) : 'None (Custom)' }}</span>
                     @endif
                 </div>
             </div>
@@ -200,6 +225,10 @@
             {{-- Location Previews Grid --}}
             @if($rightMode === 'location')
                 <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 overflow-y-auto pr-1">
+                    <div wire:key="loc-card-none" wire:click="selectLocation(null)" class="relative border-2 rounded-2xl overflow-hidden cursor-pointer group aspect-[4/3] flex flex-col items-center justify-center p-3 text-center transition-all hover:scale-[1.02] {{ $location === null ? 'border-primary bg-primary/5 shadow-md shadow-primary/15' : 'border-base-300' }}">
+                        <span class="text-xl mb-1">❌</span>
+                        <span class="text-[10px] font-bold leading-tight text-slate-500 uppercase group-hover:text-base-content">None (Custom)</span>
+                    </div>
                     @foreach(['coffee-shop', 'city-street', 'beach', 'rooftop', 'bedroom', 'bathroom', 'mall', 'gym', 'park', 'restaurant', 'hotel', 'studio'] as $loc)
                         <div wire:key="loc-card-{{ $loc }}" wire:click="selectLocation('{{ $loc }}')" class="relative border-2 rounded-2xl overflow-hidden cursor-pointer group aspect-[4/3] flex items-center justify-center transition-all hover:scale-[1.02] {{ $location === $loc ? 'border-primary shadow-md shadow-primary/15' : 'border-base-300' }}">
                             <img src="{{ $this->getLocationPreviewUrl($loc, $timeOfDay) }}" alt="{{ $loc }}" class="w-full h-full object-cover transition-transform group-hover:scale-105" />
@@ -221,6 +250,10 @@
             {{-- Pose Previews Grid --}}
             @if($rightMode === 'pose')
                 <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 overflow-y-auto pr-1">
+                    <div wire:key="pose-card-none" wire:click="selectPose(null)" class="relative border-2 rounded-2xl overflow-hidden cursor-pointer group aspect-[3/4] flex flex-col items-center justify-center p-3 text-center transition-all hover:scale-[1.02] {{ $pose === null ? 'border-primary bg-primary/5 shadow-md shadow-primary/15' : 'border-base-300' }}">
+                        <span class="text-xl mb-1">❌</span>
+                        <span class="text-[10px] font-bold leading-tight text-slate-500 uppercase group-hover:text-base-content">None (Custom)</span>
+                    </div>
                     @foreach($this->getAvailablePoses() as $p)
                         <div wire:key="pose-card-{{ $p['id'] }}" wire:click="selectPose('{{ $p['id'] }}')" class="relative border-2 rounded-2xl overflow-hidden cursor-pointer group aspect-[3/4] flex items-center justify-center transition-all hover:scale-[1.02] {{ $pose === $p['id'] ? 'border-primary shadow-md shadow-primary/15' : 'border-base-300' }}">
                             <img src="{{ $this->getPosePreviewUrl($p['id']) }}" alt="{{ $p['label'] }}" class="w-full h-full object-cover transition-transform group-hover:scale-105" />
@@ -283,7 +316,7 @@
                         {{-- Output Grid --}}
                         <div class="grid gap-4 p-4 w-full h-full {{ count($currentImgs) === 1 ? 'grid-cols-1 max-w-sm mx-auto' : (count($currentImgs) === 2 ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-3') }}">
                             @foreach($currentImgs as $img)
-                                <div wire:key="output-{{ $loop->index }}" wire:click="$set('expandedImg', '{{ $this->resolvePhotoUrl($img) }}')" class="relative rounded-xl overflow-hidden border border-base-300 aspect-[3/4] cursor-zoom-in group shadow shadow-black/10">
+                                <div wire:key="output-{{ $loop->index }}" wire:click="$set('expandedImg', '{{ $this->resolvePhotoUrl($img) }}')" class="relative rounded-xl overflow-hidden border border-base-300 {{ $this->getAspectClass($img) }} cursor-zoom-in group shadow shadow-black/10">
                                     <img src="{{ $this->resolvePhotoUrl($img) }}" class="w-full h-full object-cover" />
                                     <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2.5">
                                         <span class="text-[9px] font-bold text-white uppercase tracking-wider text-center">Zoom Photo</span>
@@ -297,7 +330,7 @@
         </div>
 
         {{-- Photos History / Gallery --}}
-        <div class="card bg-base-100 border border-base-300 rounded-3xl p-5 md:p-6 shadow-sm space-y-4 flex-1">
+        <div x-data="{ hoverImg: null, hoverAspect: 'aspect-[3/4]' }" class="card bg-base-100 border border-base-300 rounded-3xl p-5 md:p-6 shadow-sm space-y-4 flex-1 relative">
             <div class="flex justify-between items-center pb-2 border-b border-base-200">
                 <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Photo Studio Gallery</span>
                 <span class="text-[10px] font-bold text-slate-400 font-mono">{{ $galleryPhotos->count() }} Photo(s)</span>
@@ -314,15 +347,44 @@
             @else
                 <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 overflow-y-auto pr-1 max-h-[500px]">
                     @foreach($galleryPhotos as $photo)
-                        <div wire:key="gallery-photo-{{ $photo->id }}" wire:click="$set('expandedImg', '{{ $this->resolvePhotoUrl($photo->local_url) }}')" class="relative rounded-2xl overflow-hidden border border-base-350 cursor-zoom-in aspect-[3/4] group shadow-xs">
-                            <img src="{{ $this->resolvePhotoUrl($photo->local_url) }}" class="w-full h-full object-cover" />
-                            <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2.5">
-                                <span class="text-[9px] font-bold text-white uppercase tracking-wider text-center">Zoom / Download</span>
+                        @php
+                            $resolvedUrl = $this->resolvePhotoUrl($photo->local_url);
+                            $aspectClass = $this->getAspectClass($photo->local_url);
+                        @endphp
+                        <div wire:key="gallery-photo-{{ $photo->id }}" 
+                             @mouseenter="hoverImg = '{{ $resolvedUrl }}'; hoverAspect = '{{ $aspectClass }}'" 
+                             @mouseleave="hoverImg = null"
+                             class="relative rounded-2xl overflow-hidden border border-base-350 aspect-[3/4] group shadow-xs">
+                            <img src="{{ $resolvedUrl }}" class="w-full h-full object-cover" />
+                            <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-center items-center gap-2 p-2.5">
+                                <button type="button" wire:click="$set('expandedImg', '{{ $resolvedUrl }}')" class="btn btn-xs btn-primary rounded-xl text-[10px] w-11/12 text-white font-bold py-1 shadow">
+                                    🔍 Zoom
+                                </button>
+                                @if($photo->meta_data)
+                                    <button type="button" wire:click="reUse('{{ $photo->id }}')" class="btn btn-xs btn-accent rounded-xl text-[10px] w-11/12 text-white font-bold py-1 shadow">
+                                        🔄 Re-use
+                                    </button>
+                                @endif
                             </div>
                         </div>
                     @endforeach
                 </div>
             @endif
+
+            {{-- Floating Hover Popup (outside the scrollable grid wrapper but inside relative card) --}}
+            <div x-show="hoverImg" 
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 class="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-30 w-72 md:w-80 rounded-2xl bg-base-100 border border-base-300 p-2 shadow-2xl backdrop-blur-md bg-opacity-95"
+                 style="display: none;">
+                 <div class="w-full overflow-hidden rounded-xl border border-base-200 bg-black/5 flex items-center justify-center" :class="hoverAspect">
+                     <img :src="hoverImg" class="w-full h-full object-contain" />
+                 </div>
+            </div>
         </div>
     </div>
 

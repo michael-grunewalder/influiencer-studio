@@ -261,3 +261,53 @@ test('prompt builder generates photo studio prompt correctly', function () {
     expect($prompt)->toContain('The location is a coffee shop interior.');
     expect($prompt)->toContain('golden hour');
 });
+
+test('prompt builder generates photo studio prompt with custom location and pose overrides', function () {
+    $properties = new InfluencerProperties(
+        gender: 'female',
+        age: 25,
+        niche: ['Fashion'],
+        backstory: 'Travel and fashion model.',
+        personality: 50,
+        ethnicity: 'White',
+        skin_tone: 'Fair',
+        hair_color: 'Blonde',
+        hair_length: 'Long',
+        hair_texture: 'Straight',
+        eye_color: 'Blue',
+        build: 'Petite',
+        custom_description: 'freckles',
+        aesthetic_vibe: 'Coastal'
+    );
+
+    $influencer = new Influencer([
+        'name' => 'Emma',
+        'backstory' => 'Travel and fashion model.',
+        'properties' => $properties,
+    ]);
+
+    $args = [
+        'influencer' => $influencer,
+        'location' => null,
+        'locationText' => 'a high-tech cyber street in Tokyo',
+        'timeOfDay' => 'night',
+        'pose' => null,
+        'poseText' => 'leaning against a neon sign post, arms crossed',
+        'vibe' => 'street',
+        'stance' => 'standing',
+        'aspectRatio' => '9:16',
+        'expression' => 'natural',
+        'gaze' => 'looking-away',
+        'faceTag' => '@image1',
+        'wardrobeTag' => '@image2',
+    ];
+
+    $prompt = PromptBuilderService::buildPhotoStudioPrompt($args);
+
+    expect($prompt)->toContain('Street style photo of the subject from @image1');
+    expect($prompt)->toContain('wearing the complete outfit from @image2');
+    expect($prompt)->toContain('Subject is standing upright on both feet');
+    expect($prompt)->toContain('leaning against a neon sign post, arms crossed');
+    expect($prompt)->toContain('The location is a high-tech cyber street in Tokyo.');
+    expect($prompt)->not->toContain('Modify the base image @image1');
+});

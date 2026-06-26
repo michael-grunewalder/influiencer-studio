@@ -7,8 +7,8 @@ xdebug_enabled: false
 additional_hostnames: []
 additional_fqdns: []
 database:
-    type: postgres
-    version: "18"
+    type: mariadb
+    version: "11.8"
 working_dir:
     web: /var/www/html
 use_dns_when_possible: true
@@ -236,13 +236,7 @@ corepack_enable: false
 # default_container_timeout: 120
 # The default time that DDEV waits for all containers to become ready can be increased from
 # the default 120. This helps in importing huge databases, for example.
-
-web_extra_exposed_ports:
-- name: nodejs
-  container_port: 5174
-  http_port: 2999
-  https_port: 3000
-#- name: something
+#######- name: something
 #  container_port: 4000
 #  https_port: 4000
 #  http_port: 3999

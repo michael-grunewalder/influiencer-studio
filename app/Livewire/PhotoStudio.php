@@ -31,7 +31,7 @@ class PhotoStudio extends Component
 
     public string $timeOfDay = 'afternoon';
 
-    public string $pose = 'front';
+    public ?string $pose = 'front';
 
     public string $vibe = 'candid';
 
@@ -56,6 +56,10 @@ class PhotoStudio extends Component
 
     public string $hairstyleText = '';
 
+    public string $locationText = '';
+
+    public string $poseText = '';
+
     public bool $hairstyleLocked = false;
 
     // Outfit mapping
@@ -72,6 +76,8 @@ class PhotoStudio extends Component
     public string $rightMode = 'location'; // location, pose
 
     public ?string $expandedImg = null;
+
+    public ?string $reUseAssetId = null;
 
     protected $listeners = ['photoStudioReset' => 'resetParams'];
 
@@ -98,9 +104,12 @@ class PhotoStudio extends Component
         $this->propText = '';
         $this->wardrobeText = '';
         $this->hairstyleText = '';
+        $this->locationText = '';
+        $this->poseText = '';
         $this->hairstyleLocked = false;
         $this->currentImgs = [];
         $this->error = null;
+        $this->reUseAssetId = null;
     }
 
     public function randomize(): void
@@ -123,6 +132,8 @@ class PhotoStudio extends Component
         $this->hairstyleText = '';
         $this->propText = '';
         $this->wardrobeText = '';
+        $this->locationText = '';
+        $this->poseText = '';
         $this->selectedOutfitId = null;
     }
 
@@ -259,69 +270,122 @@ class PhotoStudio extends Component
 
             // 1. Resolve reference images
             $imageUrls = [];
-
-            // Reference 1: Pose Preview (the canvas/base image to edit)
-            $poseUrl = $this->getPosePreviewUrl($this->pose);
-            $publicPoseUrl = $this->getPublicUrlForReference($team, $poseUrl);
-            if (! $publicPoseUrl) {
-                throw new \Exception('Failed to upload pose preview reference.');
-            }
-            $imageUrls[] = $publicPoseUrl;
-            $poseTag = '@image1'; // @image1 is always the pose template!
-
-            // Reference 2: Face/Identity (closeup or avatar)
-            $faceRef = $this->influencer->properties->closeup ?? $this->influencer->avatar;
+            $poseTag = null;
             $faceTag = null;
-            if ($faceRef) {
-                $publicFaceUrl = $this->getPublicUrlForReference($team, $faceRef);
-                if ($publicFaceUrl) {
-                    $imageUrls[] = $publicFaceUrl;
-                    $faceTag = '@image'.count($imageUrls);
-                }
-            }
+            $wardrobeTag = null;
+            $closeUp1Tag = null;
+            $closeUp2Tag = null;
 
-            // Reference 3: Wardrobe Outfit (selected look or character sheet)
-            $wardrobeRef = null;
-            $trimmedWardrobeText = trim($this->wardrobeText ?? '');
-            if (empty($trimmedWardrobeText)) {
-                if ($this->outfitPreset === 'wardrobe' && $this->selectedOutfitId) {
-                    $outfit = $this->influencer->outfits()->find($this->selectedOutfitId);
-                    if ($outfit && $outfit->image_path) {
-                        $wardrobeRef = $outfit->image_path;
+            if ($this->reUseAssetId) {
+                // Re-use mode reference resolution
+                $reUseAsset = TeamAsset::find($this->reUseAssetId);
+                if (! $reUseAsset) {
+                    throw new \Exception('Re-use reference image not found.');
+                }
+                $publicPoseUrl = $this->getPublicUrlForReference($team, $reUseAsset->local_url);
+                if (! $publicPoseUrl) {
+                    throw new \Exception('Failed to upload re-use reference image.');
+                }
+                $imageUrls[] = $publicPoseUrl;
+                $poseTag = '@image1';
+
+                // Wardrobe reference (wardrobe sheet or character sheet)
+                $wardrobeRef = null;
+                $trimmedWardrobeText = trim($this->wardrobeText ?? '');
+                if (empty($trimmedWardrobeText)) {
+                    if ($this->outfitPreset === 'wardrobe' && $this->selectedOutfitId) {
+                        $outfit = $this->influencer->outfits()->find($this->selectedOutfitId);
+                        if ($outfit && $outfit->image_path) {
+                            $wardrobeRef = $outfit->image_path;
+                        }
+                    } elseif ($this->outfitPreset === 'current') {
+                        $wardrobeRef = $this->influencer->properties->character_sheet;
                     }
-                } elseif ($this->outfitPreset === 'current') {
+                }
+                if (! $wardrobeRef) {
                     $wardrobeRef = $this->influencer->properties->character_sheet;
                 }
-            }
-
-            $wardrobeTag = null;
-            if ($wardrobeRef) {
-                $publicWardrobeUrl = $this->getPublicUrlForReference($team, $wardrobeRef);
-                if ($publicWardrobeUrl) {
-                    $imageUrls[] = $publicWardrobeUrl;
-                    $wardrobeTag = '@image'.count($imageUrls);
+                if ($wardrobeRef) {
+                    $publicWardrobeUrl = $this->getPublicUrlForReference($team, $wardrobeRef);
+                    if ($publicWardrobeUrl) {
+                        $imageUrls[] = $publicWardrobeUrl;
+                        $wardrobeTag = '@image'.count($imageUrls);
+                    }
                 }
-            }
 
-            // Reference 4: Closeup sheet / detail sheet
-            $detailSheetRef = $this->influencer->properties->detail_sheet;
-            $closeUp1Tag = null;
-            if ($detailSheetRef) {
-                $publicDetailUrl = $this->getPublicUrlForReference($team, $detailSheetRef);
-                if ($publicDetailUrl) {
-                    $imageUrls[] = $publicDetailUrl;
-                    $closeUp1Tag = '@image'.count($imageUrls);
+                // Close-up reference (closeup or avatar)
+                $faceRef = $this->influencer->properties->closeup ?? $this->influencer->avatar;
+                if ($faceRef) {
+                    $publicFaceUrl = $this->getPublicUrlForReference($team, $faceRef);
+                    if ($publicFaceUrl) {
+                        $imageUrls[] = $publicFaceUrl;
+                        $faceTag = '@image'.count($imageUrls);
+                        $closeUp1Tag = $faceTag;
+                    }
                 }
-            }
+            } else {
+                // Normal mode reference resolution
+                // Reference 1: Pose Preview (the canvas/base image to edit)
+                if ($this->pose) {
+                    $poseUrl = $this->getPosePreviewUrl($this->pose);
+                    $publicPoseUrl = $this->getPublicUrlForReference($team, $poseUrl);
+                    if (! $publicPoseUrl) {
+                        throw new \Exception('Failed to upload pose preview reference.');
+                    }
+                    $imageUrls[] = $publicPoseUrl;
+                    $poseTag = '@image1'; // @image1 is always the pose template!
+                }
 
-            // Reference 5: Character sheet (if not already used as wardrobe reference)
-            $charSheetRef = $this->influencer->properties->character_sheet;
-            $closeUp2Tag = null;
-            if ($charSheetRef && $charSheetRef !== $wardrobeRef) {
-                $publicCharUrl = $this->getPublicUrlForReference($team, $charSheetRef);
-                if ($publicCharUrl) {
-                    $imageUrls[] = $publicCharUrl;
-                    $closeUp2Tag = '@image'.count($imageUrls);
+                // Reference 2: Face/Identity (closeup or avatar)
+                $faceRef = $this->influencer->properties->closeup ?? $this->influencer->avatar;
+                if ($faceRef) {
+                    $publicFaceUrl = $this->getPublicUrlForReference($team, $faceRef);
+                    if ($publicFaceUrl) {
+                        $imageUrls[] = $publicFaceUrl;
+                        $faceTag = '@image'.count($imageUrls);
+                    }
+                }
+
+                // Reference 3: Wardrobe Outfit (selected look or character sheet)
+                $wardrobeRef = null;
+                $trimmedWardrobeText = trim($this->wardrobeText ?? '');
+                if (empty($trimmedWardrobeText)) {
+                    if ($this->outfitPreset === 'wardrobe' && $this->selectedOutfitId) {
+                        $outfit = $this->influencer->outfits()->find($this->selectedOutfitId);
+                        if ($outfit && $outfit->image_path) {
+                            $wardrobeRef = $outfit->image_path;
+                        }
+                    } elseif ($this->outfitPreset === 'current') {
+                        $wardrobeRef = $this->influencer->properties->character_sheet;
+                    }
+                }
+
+                if ($wardrobeRef) {
+                    $publicWardrobeUrl = $this->getPublicUrlForReference($team, $wardrobeRef);
+                    if ($publicWardrobeUrl) {
+                        $imageUrls[] = $publicWardrobeUrl;
+                        $wardrobeTag = '@image'.count($imageUrls);
+                    }
+                }
+
+                // Reference 4: Closeup sheet / detail sheet
+                $detailSheetRef = $this->influencer->properties->detail_sheet;
+                if ($detailSheetRef) {
+                    $publicDetailUrl = $this->getPublicUrlForReference($team, $detailSheetRef);
+                    if ($publicDetailUrl) {
+                        $imageUrls[] = $publicDetailUrl;
+                        $closeUp1Tag = '@image'.count($imageUrls);
+                    }
+                }
+
+                // Reference 5: Character sheet (if not already used as wardrobe reference)
+                $charSheetRef = $this->influencer->properties->character_sheet;
+                if ($charSheetRef && $charSheetRef !== $wardrobeRef) {
+                    $publicCharUrl = $this->getPublicUrlForReference($team, $charSheetRef);
+                    if ($publicCharUrl) {
+                        $imageUrls[] = $publicCharUrl;
+                        $closeUp2Tag = '@image'.count($imageUrls);
+                    }
                 }
             }
 
@@ -346,6 +410,8 @@ class PhotoStudio extends Component
                 'wardrobeTag' => $wardrobeTag,
                 'closeUp1Tag' => $closeUp1Tag,
                 'closeUp2Tag' => $closeUp2Tag,
+                'locationText' => $this->locationText,
+                'poseText' => $this->poseText,
             ];
 
             $prompts = [];
@@ -371,6 +437,55 @@ class PhotoStudio extends Component
                 $payloads[] = $this->buildModelPayload($this->selectedModel, $p, $imageUrls, $this->aspectRatio);
             }
 
+            // Prepare settings payload for metadata
+            $settings = [
+                'selectedModel' => $this->selectedModel,
+                'location' => $this->location,
+                'timeOfDay' => $this->timeOfDay,
+                'pose' => $this->pose,
+                'vibe' => $this->vibe,
+                'outfitPreset' => $this->outfitPreset,
+                'stance' => $this->stance,
+                'aspectRatio' => $this->aspectRatio,
+                'resolution' => $this->resolution,
+                'outputCount' => $this->outputCount,
+                'expression' => $this->expression,
+                'gaze' => $this->gaze,
+                'propText' => $this->propText,
+                'wardrobeText' => $this->wardrobeText,
+                'hairstyleText' => $this->hairstyleText,
+                'locationText' => $this->locationText,
+                'poseText' => $this->poseText,
+                'hairstyleLocked' => $this->hairstyleLocked,
+                'selectedOutfitId' => $this->selectedOutfitId,
+                'reUseAssetId' => $this->reUseAssetId,
+            ];
+
+            $basicPrompt = "Model: {$this->selectedModel}, Stance: {$this->stance}, Vibe: {$this->vibe}";
+            if ($this->locationText) {
+                $basicPrompt .= ", Custom Location: {$this->locationText}";
+            } else {
+                $basicPrompt .= ", Location: {$this->location}";
+            }
+            if ($this->poseText) {
+                $basicPrompt .= ", Custom Pose: {$this->poseText}";
+            } else {
+                $basicPrompt .= ", Pose: {$this->pose}";
+            }
+            if ($this->wardrobeText) {
+                $basicPrompt .= ", Custom Outfit: {$this->wardrobeText}";
+            } elseif ($this->selectedOutfitId) {
+                $basicPrompt .= ", Outfit ID: {$this->selectedOutfitId}";
+            } else {
+                $basicPrompt .= ", Outfit Preset: {$this->outfitPreset}";
+            }
+            if ($this->hairstyleText) {
+                $basicPrompt .= ", Hairstyle: {$this->hairstyleText}";
+            }
+            if ($this->propText) {
+                $basicPrompt .= ", Props: {$this->propText}";
+            }
+
             // 5. Call generator
             $results = $falAiService->generateParallelPayloads($team, $payloads, $this->selectedModel);
 
@@ -384,12 +499,18 @@ class PhotoStudio extends Component
                         $ext = pathinfo(parse_url($remoteUrl, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'png';
                         $destPath = "teams/{$team->id}/influencers/{$this->influencer->id}/photo-studio/photo_".time()."_{$index}.{$ext}";
 
-                        // Download and register
+                        // Download and register with metadata
                         $localUrl = $falAiService->downloadAndRegister(
                             $team,
                             $remoteUrl,
                             "photo-studio-{$this->influencer->id}",
-                            $destPath
+                            $destPath,
+                            [
+                                'module' => 'photo-studio',
+                                'settings' => $settings,
+                                'basic_prompt' => $basicPrompt,
+                                'enhanced_prompt' => $prompts[$index] ?? $prompts[0],
+                            ]
                         );
 
                         $tempImgs[] = $localUrl;
@@ -458,14 +579,82 @@ class PhotoStudio extends Component
         $this->outfitPreset = 'wardrobe';
     }
 
-    public function selectPose(string $id): void
+    public function updatedLocationText(string $value): void
     {
-        $this->pose = $id;
+        if (trim($value) !== '') {
+            $this->location = null;
+        }
     }
 
-    public function selectLocation(string $id): void
+    public function updatedPoseText(string $value): void
+    {
+        if (trim($value) !== '') {
+            $this->pose = null;
+            $this->reUseAssetId = null;
+        }
+    }
+
+    public function selectPose(?string $id): void
+    {
+        $this->pose = $id;
+        if ($id !== null) {
+            $this->poseText = '';
+            $this->reUseAssetId = null;
+        }
+    }
+
+    public function reUse(string $photoId): void
+    {
+        $asset = TeamAsset::find($photoId);
+        if (! $asset || ! $asset->meta_data) {
+            Toaster::error(__('Keine Re-Use-Daten für dieses Foto vorhanden.'));
+
+            return;
+        }
+
+        $settings = $asset->meta_data['settings'] ?? [];
+        if (empty($settings)) {
+            Toaster::error(__('Keine Re-Use-Einstellungen gefunden.'));
+
+            return;
+        }
+
+        $this->selectedModel = $settings['selectedModel'] ?? 'openai/gpt-image-2/edit';
+        $this->location = $settings['location'] ?? null;
+        $this->timeOfDay = $settings['timeOfDay'] ?? 'afternoon';
+        $this->pose = $settings['pose'] ?? null;
+        $this->vibe = $settings['vibe'] ?? 'candid';
+        $this->outfitPreset = $settings['outfitPreset'] ?? 'current';
+        $this->stance = $settings['stance'] ?? 'standing';
+        $this->aspectRatio = $settings['aspectRatio'] ?? '9:16';
+        $this->resolution = $settings['resolution'] ?? '4k';
+        $this->outputCount = $settings['outputCount'] ?? 1;
+        $this->expression = $settings['expression'] ?? 'natural';
+        $this->gaze = $settings['gaze'] ?? 'at-camera';
+        $this->propText = $settings['propText'] ?? '';
+        $this->wardrobeText = $settings['wardrobeText'] ?? '';
+        $this->hairstyleText = $settings['hairstyleText'] ?? '';
+        $this->locationText = $settings['locationText'] ?? '';
+        $this->poseText = $settings['poseText'] ?? '';
+        $this->hairstyleLocked = $settings['hairstyleLocked'] ?? false;
+        $this->selectedOutfitId = $settings['selectedOutfitId'] ?? null;
+
+        $this->reUseAssetId = $photoId;
+
+        Toaster::success(__('Parameter erfolgreich geladen! Dieses Foto wird als Pose-Referenz verwendet.'));
+    }
+
+    public function clearReUse(): void
+    {
+        $this->reUseAssetId = null;
+    }
+
+    public function selectLocation(?string $id): void
     {
         $this->location = $id;
+        if ($id !== null) {
+            $this->locationText = '';
+        }
     }
 
     public function resolvePhotoUrl(?string $url): ?string
@@ -496,6 +685,48 @@ class PhotoStudio extends Component
         }
 
         return $url;
+    }
+
+    public function getAspectClass(?string $url): string
+    {
+        if (empty($url)) {
+            return 'aspect-[3/4]';
+        }
+
+        $cleanPath = $url;
+        if (str_starts_with($cleanPath, '/storage/')) {
+            $cleanPath = substr($cleanPath, strlen('/storage/'));
+        } elseif (str_starts_with($cleanPath, 'storage/')) {
+            $cleanPath = substr($cleanPath, strlen('storage/'));
+        }
+
+        $fullPath = null;
+        if (Storage::disk('local')->exists($cleanPath)) {
+            $fullPath = Storage::disk('local')->path($cleanPath);
+        } elseif (Storage::disk('public')->exists($cleanPath)) {
+            $fullPath = Storage::disk('public')->path($cleanPath);
+        }
+
+        if ($fullPath && file_exists($fullPath)) {
+            $info = @getimagesize($fullPath);
+            if ($info) {
+                $width = $info[0];
+                $height = $info[1];
+                if ($height > 0) {
+                    $ratio = $width / $height;
+                    if ($ratio > 1.3) {
+                        return 'aspect-[16/9]';
+                    }
+                    if ($ratio < 0.75) {
+                        return 'aspect-[9/16]';
+                    }
+
+                    return 'aspect-square';
+                }
+            }
+        }
+
+        return 'aspect-[3/4]';
     }
 
     public function render()

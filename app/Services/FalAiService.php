@@ -540,7 +540,7 @@ class FalAiService
     /**
      * Download a remote asset (e.g. from fal.ai) and register it in the team_assets registry.
      */
-    public function downloadAndRegister(Team $team, string $remoteUrl, string $purpose, string $destPath): string
+    public function downloadAndRegister(Team $team, string $remoteUrl, string $purpose, string $destPath, ?array $metaData = null): string
     {
         try {
             // If it is a local URL already (e.g. mock), copy it
@@ -561,6 +561,7 @@ class FalAiService
                         'remote_url' => $remoteUrl,
                         'mime_type' => mime_content_type($srcPath) ?: 'image/png',
                         'purpose' => $purpose,
+                        'meta_data' => $metaData,
                     ]);
 
                     return $localUrl;
@@ -584,6 +585,7 @@ class FalAiService
                     'remote_url' => $remoteUrl,
                     'mime_type' => $mimeType,
                     'purpose' => $purpose,
+                    'meta_data' => $metaData,
                 ]);
 
                 return $localUrl;

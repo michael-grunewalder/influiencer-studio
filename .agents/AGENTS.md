@@ -12,3 +12,9 @@ Below are the key image model APIs at fal.ai that are used for reference/inspira
 - **gpt 2 edit**: `https://fal.ai/models/openai/gpt-image-2/edit/api`
 - **ideogram 4 txt2img**: `https://fal.ai/models/ideogram/v4/api`
 - **ideogram 4 img2img**: `https://fal.ai/models/ideogram/v4/image-to-image/api`
+
+# AI Prompting
+Below are the promting guides for th image models:
+Seedream 4.5: https://docs.byteplus.com/en/docs/ModelArk/1829186
+GPT1.5 and GPT2: https://developers.openai.com/cookbook/examples/multimodal/image-gen-models-prompting-guide
+ideogram 4:https://github.com/ideogram-oss/ideogram4/blob/main/docs/prompting.md
