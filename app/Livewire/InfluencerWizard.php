@@ -375,39 +375,27 @@ class InfluencerWizard extends Component
                 'payloads' => $payloads,
             ]);
 
-            // 5. Generate parallel variations
-            $results = $falAiService->generateParallelPayloads($team, $payloads, $selectedModel);
+            // 5. Submit all variations to queue
+            foreach ($payloads as $index => $payload) {
+                $queueRes = $falAiService->queue($team, $selectedModel, $payload);
+                $requestId = $queueRes['request_id'] ?? null;
 
-            foreach ($results as $index => $res) {
-                if ($res['status'] === 'success') {
-                    $this->generated_variations[$index]['status'] = 'success';
-                    $this->generated_variations[$index]['url'] = $res['images'][0]['url'] ?? null;
-                    $this->generated_variations[$index]['error'] = null;
-                } else {
-                    $this->generated_variations[$index]['status'] = 'failed';
-                    $this->generated_variations[$index]['error'] = $res['error'] ?? 'Unknown error';
-                    $this->generated_variations[$index]['url'] = null;
+                if (! $requestId) {
+                    throw new \Exception('No request ID returned from FAL.AI Queue.');
                 }
+
+                $this->generated_variations[$index]['status'] = 'processing';
+                $this->generated_variations[$index]['request_id'] = $requestId;
+                $this->generated_variations[$index]['model'] = $selectedModel;
+                $this->generated_variations[$index]['queue_status'] = 'IN_QUEUE';
             }
 
-            // Find first successful variation and set as selected_variation_index
-            $firstSuccess = null;
-            foreach ($this->generated_variations as $idx => $var) {
-                if ($var['status'] === 'success') {
-                    $firstSuccess = $idx;
-                    break;
-                }
-            }
-            $this->selected_variation_index = $firstSuccess ?? 0;
-
-            $this->is_generating = false;
+            $this->is_generating = true;
             $this->dispatch('credits-updated');
 
-            Log::info('InfluencerWizard::generate: Finished generating variations', [
+            Log::info('InfluencerWizard::generate: Variations submitted to queue', [
                 'generated_variations' => $this->generated_variations,
             ]);
-
-            Toaster::success(__('Variationen erfolgreich generiert! Wähle deinen Favoriten.'));
         } catch (\Throwable $e) {
             Log::error('InfluencerWizard::generate: Image generation failed', [
                 'error_message' => $e->getMessage(),
@@ -463,32 +451,19 @@ class InfluencerWizard extends Component
                 'payload' => $variation['payload'],
             ]);
 
-            // Single payload retry using parallel generation logic to maintain consistency
-            $results = $falAiService->generateParallelPayloads($team, [$variation['payload']], $selectedModel);
-            $res = $results[0] ?? null;
+            // Single payload retry using queue
+            $queueRes = $falAiService->queue($team, $selectedModel, $variation['payload']);
+            $requestId = $queueRes['request_id'] ?? null;
 
-            if ($res && $res['status'] === 'success') {
-                $this->generated_variations[$index]['status'] = 'success';
-                $this->generated_variations[$index]['url'] = $res['images'][0]['url'] ?? null;
-
-                // If the selected variation index was on this and it failed, keep/set it selected
-                if ($this->selected_variation_index === $index) {
-                    $this->selected_variation_index = $index;
-                } else {
-                    // If the current selection is not a success, select this one
-                    $currentSelection = $this->generated_variations[$this->selected_variation_index] ?? null;
-                    if (! $currentSelection || ($currentSelection['status'] ?? '') !== 'success') {
-                        $this->selected_variation_index = $index;
-                    }
-                }
-
-                $this->dispatch('credits-updated');
-                Toaster::success(__('Variation erfolgreich neu generiert!'));
-            } else {
-                $this->generated_variations[$index]['status'] = 'failed';
-                $this->generated_variations[$index]['error'] = $res['error'] ?? 'Unknown error';
-                Toaster::error(__('Fehler bei der Neugenerierung.'));
+            if (! $requestId) {
+                throw new \Exception('No request ID returned from FAL.AI Queue.');
             }
+
+            $this->generated_variations[$index]['status'] = 'processing';
+            $this->generated_variations[$index]['request_id'] = $requestId;
+            $this->generated_variations[$index]['model'] = $selectedModel;
+            $this->generated_variations[$index]['queue_status'] = 'IN_QUEUE';
+            $this->is_generating = true;
         } catch (\Throwable $e) {
             Log::error('InfluencerWizard::retryGeneration: Retry failed', [
                 'index' => $index,
@@ -499,6 +474,70 @@ class InfluencerWizard extends Component
             $this->generated_variations[$index]['status'] = 'failed';
             $this->generated_variations[$index]['error'] = $e->getMessage();
             Toaster::error(__('Fehler bei der Bildgenerierung: ').$e->getMessage());
+        }
+    }
+
+    public function checkWizardGenerationProgress(): void
+    {
+        $team = $this->getActiveTeam();
+        if (! $team) {
+            return;
+        }
+
+        $service = app(FalAiService::class);
+
+        foreach ($this->generated_variations as $index => $var) {
+            if (($var['status'] ?? '') !== 'processing') {
+                continue;
+            }
+
+            $requestId = $var['request_id'] ?? null;
+            $model = $var['model'] ?? null;
+
+            if (! $requestId || ! $model) {
+                continue;
+            }
+
+            try {
+                $statusRes = $service->checkQueueStatus($team, $model, $requestId);
+                $status = $statusRes['status'] ?? 'IN_QUEUE';
+                $this->generated_variations[$index]['queue_status'] = $status;
+
+                if ($status === 'COMPLETED') {
+                    $response = $service->getQueueResponse($team, $model, $requestId);
+                    $this->generated_variations[$index]['status'] = 'success';
+                    $this->generated_variations[$index]['url'] = $response['images'][0]['url'] ?? null;
+                    $this->generated_variations[$index]['error'] = null;
+
+                    // If the selected variation index was on this and it failed, keep/set it selected
+                    if ($this->selected_variation_index === $index) {
+                        $this->selected_variation_index = $index;
+                    } else {
+                        // If the current selection is not a success, select this one
+                        $currentSelection = $this->generated_variations[$this->selected_variation_index] ?? null;
+                        if (! $currentSelection || ($currentSelection['status'] ?? '') !== 'success') {
+                            $this->selected_variation_index = $index;
+                        }
+                    }
+
+                    $this->dispatch('credits-updated');
+                } elseif ($status === 'FAILED') {
+                    $this->generated_variations[$index]['status'] = 'failed';
+                    $this->generated_variations[$index]['error'] = 'Generation failed on FAL.AI side.';
+                }
+            } catch (\Throwable $e) {
+                Log::error('InfluencerWizard::checkWizardGenerationProgress: Failed for index '.$index, [
+                    'error' => $e->getMessage(),
+                ]);
+                $this->generated_variations[$index]['status'] = 'failed';
+                $this->generated_variations[$index]['error'] = $e->getMessage();
+            }
+        }
+
+        // If no variations are processing anymore, set is_generating = false
+        $stillProcessing = collect($this->generated_variations)->contains('status', 'processing');
+        if (! $stillProcessing) {
+            $this->is_generating = false;
         }
     }
 

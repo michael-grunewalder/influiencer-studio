@@ -929,10 +929,14 @@ Shot on Hasselblad X2D 100C, photorealistic, ultra-sharp micro detail, RAW photo
             $basePose = 'relaxed natural posture';
         }
 
-        $stancePrefix = $isSitting
-            ? 'Subject is clearly seated. '
-            : 'Subject is standing upright on both feet — not sitting, not crouching. ';
-        $poseDesc = $stancePrefix.$basePose;
+        if (! empty($trimmedPoseText)) {
+            $poseDesc = $basePose;
+        } else {
+            $stancePrefix = $isSitting
+                ? 'Subject is clearly seated. '
+                : 'Subject is standing upright on both feet — not sitting, not crouching. ';
+            $poseDesc = $stancePrefix.$basePose;
+        }
 
         // ── Expression ───
         $expressionMap = [
@@ -1203,10 +1207,12 @@ Shot on Hasselblad X2D 100C, photorealistic, ultra-sharp micro detail, RAW photo
         }
 
         $framing = '';
-        if ($isSitting) {
-            $framing = $aspectRatio === '16:9' ? '16:9, waist-up.' : '9:16, 3/4 framing head to mid-thigh.';
-        } else {
-            $framing = $aspectRatio === '16:9' ? '16:9, waist-up framing.' : '9:16, chest-up framing.';
+        if (empty($trimmedPoseText)) {
+            if ($isSitting) {
+                $framing = $aspectRatio === '16:9' ? '16:9, waist-up.' : '9:16, 3/4 framing head to mid-thigh.';
+            } else {
+                $framing = $aspectRatio === '16:9' ? '16:9, waist-up framing.' : '9:16, chest-up framing.';
+            }
         }
 
         // ── Hairstyle override — beats any reference image ───

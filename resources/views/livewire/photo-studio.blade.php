@@ -1,4 +1,5 @@
-<div class="grid grid-cols-1 xl:grid-cols-12 gap-6 h-full font-sans text-base-content">
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-6 h-full font-sans text-base-content"
+     @if($generating) wire:poll.2s="checkGenerationProgress" @endif>
 
     {{-- Left Sidebar: Settings Panel (xl:col-span-4) --}}
     <div class="xl:col-span-4 space-y-6 flex flex-col h-full overflow-y-auto pr-1">
@@ -166,10 +167,21 @@
 
                 {{-- Action & Charges --}}
                 <div class="space-y-2 pt-2">
-                    <button type="button" wire:click="generate" wire:loading.attr="disabled" wire:target="generate" class="btn btn-primary w-full rounded-2xl font-bold py-3 shadow-lg shadow-primary/20 text-white flex items-center justify-center gap-2">
-                        <span wire:loading wire:target="generate" class="loading loading-spinner loading-xs"></span>
-                        <span wire:loading wire:target="generate">Generating...</span>
-                        <span wire:loading.remove wire:target="generate">📸 Generate Content</span>
+                    <button type="button" wire:click="generate" @disabled($generating) class="btn btn-primary w-full rounded-2xl font-bold py-3 shadow-lg shadow-primary/20 text-white flex items-center justify-center gap-2">
+                        @if($generating)
+                            <span class="loading loading-spinner loading-xs"></span>
+                            <span>
+                                @if($queueStatus === 'IN_QUEUE')
+                                    In Queue...
+                                @elseif($queueStatus === 'IN_PROGRESS')
+                                    Generating...
+                                @else
+                                    Generating...
+                                @endif
+                            </span>
+                        @else
+                            <span>📸 Generate Content</span>
+                        @endif
                     </button>
                     <div class="flex justify-between items-center text-[10px] text-slate-500 font-medium px-1">
                         <span>Model Cost: ${{ number_format($outputCount * 0.35, 2) }}</span>
@@ -274,58 +286,70 @@
         </div>
 
         {{-- Active Generation Output / Display Area --}}
-        <div wire:loading.class="block" wire:loading.class.remove="hidden" wire:target="generate" class="card bg-base-100 border border-base-300 rounded-3xl p-5 md:p-6 shadow-sm space-y-4 {{ count($currentImgs) > 0 || $error ? '' : 'hidden' }}">
+        <div class="card bg-base-100 border border-base-300 rounded-3xl p-5 md:p-6 shadow-sm space-y-4 {{ $generating || count($currentImgs) > 0 || $error ? '' : 'hidden' }}">
             <div class="flex justify-between items-center pb-2 border-b border-base-200">
                 <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Output Gallery</span>
-                <span wire:loading.remove wire:target="generate">
+                @if(!$generating)
                     @if(count($currentImgs) > 0)
                         <span class="text-[10px] font-bold text-emerald-500 uppercase tracking-wide">✓ Success</span>
                     @endif
-                </span>
+                @endif
             </div>
 
             {{-- Image Generation Progress / Error / Grid --}}
             <div class="relative min-h-[220px] bg-base-200/50 rounded-2xl flex items-center justify-center overflow-hidden border border-base-300">
                 {{-- Loading State --}}
-                <div wire:loading wire:target="generate" class="flex flex-col items-center justify-center p-8 text-center space-y-3">
-                    <div class="relative w-12 h-12 flex items-center justify-center">
-                        <div class="absolute inset-0 rounded-full border-4 border-primary/20"></div>
-                        <div class="absolute inset-0 rounded-full border-4 border-t-primary animate-spin"></div>
+                @if($generating)
+                    <div class="flex flex-col items-center justify-center p-8 text-center space-y-3">
+                        <div class="relative w-12 h-12 flex items-center justify-center">
+                            <div class="absolute inset-0 rounded-full border-4 border-primary/20"></div>
+                            <div class="absolute inset-0 rounded-full border-4 border-t-primary animate-spin"></div>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-bold text-base-content uppercase tracking-wider animate-pulse">
+                                @if($queueStatus === 'IN_QUEUE')
+                                    In Queue...
+                                @elseif($queueStatus === 'IN_PROGRESS')
+                                    Generating High-Fidelity Photos...
+                                @else
+                                    Generating High-Fidelity Photos...
+                                @endif
+                            </h4>
+                            <p class="text-[10px] text-slate-500 mt-1 max-w-[240px]">This takes up to 45 seconds per batch.</p>
+                        </div>
                     </div>
-                    <div>
-                        <h4 class="text-xs font-bold text-base-content uppercase tracking-wider animate-pulse">Generating High-Fidelity Photos...</h4>
-                        <p class="text-[10px] text-slate-500 mt-1 max-w-[240px]">This takes up to 45 seconds per batch.</p>
-                    </div>
-                </div>
+                @endif
 
                 {{-- Non-Loading Results State --}}
-                <div wire:loading.remove wire:target="generate" class="w-full h-full flex items-center justify-center">
-                    @if($error)
-                        <div class="flex flex-col items-center justify-center p-8 text-center space-y-3">
-                            <div class="w-12 h-12 rounded-full bg-error/10 border border-error/20 flex items-center justify-center text-error">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <h4 class="text-xs font-bold text-base-content">Generation Failed</h4>
-                                <p class="text-[10px] text-slate-500 mt-1 max-w-sm line-clamp-3 leading-normal border border-error/20 p-2.5 rounded-xl bg-error/5">{{ $error }}</p>
-                            </div>
-                        </div>
-                    @elseif(count($currentImgs) > 0)
-                        {{-- Output Grid --}}
-                        <div class="grid gap-4 p-4 w-full h-full {{ count($currentImgs) === 1 ? 'grid-cols-1 max-w-sm mx-auto' : (count($currentImgs) === 2 ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-3') }}">
-                            @foreach($currentImgs as $img)
-                                <div wire:key="output-{{ $loop->index }}" wire:click="$set('expandedImg', '{{ $this->resolvePhotoUrl($img) }}')" class="relative rounded-xl overflow-hidden border border-base-300 {{ $this->getAspectClass($img) }} cursor-zoom-in group shadow shadow-black/10">
-                                    <img src="{{ $this->resolvePhotoUrl($img) }}" class="w-full h-full object-cover" />
-                                    <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2.5">
-                                        <span class="text-[9px] font-bold text-white uppercase tracking-wider text-center">Zoom Photo</span>
-                                    </div>
+                @if(!$generating)
+                    <div class="w-full h-full flex items-center justify-center">
+                        @if($error)
+                            <div class="flex flex-col items-center justify-center p-8 text-center space-y-3">
+                                <div class="w-12 h-12 rounded-full bg-error/10 border border-error/20 flex items-center justify-center text-error">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                    </svg>
                                 </div>
-                            @endforeach
-                        </div>
-                    @endif
-                </div>
+                                <div>
+                                    <h4 class="text-xs font-bold text-base-content">Generation Failed</h4>
+                                    <p class="text-[10px] text-slate-500 mt-1 max-w-sm line-clamp-3 leading-normal border border-error/20 p-2.5 rounded-xl bg-error/5">{{ $error }}</p>
+                                </div>
+                            </div>
+                        @elseif(count($currentImgs) > 0)
+                            {{-- Output Grid --}}
+                            <div class="grid gap-4 p-4 w-full h-full {{ count($currentImgs) === 1 ? 'grid-cols-1 max-w-sm mx-auto' : (count($currentImgs) === 2 ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-3') }}">
+                                @foreach($currentImgs as $img)
+                                    <div wire:key="output-{{ $loop->index }}" wire:click="$set('expandedImg', '{{ $this->resolvePhotoUrl($img) }}')" class="relative rounded-xl overflow-hidden border border-base-300 {{ $this->getAspectClass($img) }} cursor-zoom-in group shadow shadow-black/10">
+                                        <img src="{{ $this->resolvePhotoUrl($img) }}" class="w-full h-full object-cover" />
+                                        <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2.5">
+                                            <span class="text-[9px] font-bold text-white uppercase tracking-wider text-center">Zoom Photo</span>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                @endif
             </div>
         </div>
 

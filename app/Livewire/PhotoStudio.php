@@ -72,6 +72,10 @@ class PhotoStudio extends Component
 
     public ?string $error = null;
 
+    public array $queueRequests = [];
+
+    public ?string $queueStatus = null;
+
     // View options
     public string $rightMode = 'location'; // location, pose
 
@@ -326,7 +330,7 @@ class PhotoStudio extends Component
             } else {
                 // Normal mode reference resolution
                 // Reference 1: Pose Preview (the canvas/base image to edit)
-                if ($this->pose) {
+                if ($this->pose && empty(trim($this->poseText ?? ''))) {
                     $poseUrl = $this->getPosePreviewUrl($this->pose);
                     $publicPoseUrl = $this->getPublicUrlForReference($team, $poseUrl);
                     if (! $publicPoseUrl) {
@@ -394,7 +398,7 @@ class PhotoStudio extends Component
                 'influencer' => $this->influencer,
                 'location' => $this->location,
                 'timeOfDay' => $this->timeOfDay,
-                'pose' => $this->pose,
+                'pose' => empty(trim($this->poseText ?? '')) ? $this->pose : null,
                 'vibe' => $this->vibe,
                 'wardrobeText' => $this->wardrobeText,
                 'hairstyleText' => $this->hairstyleText,
@@ -486,51 +490,29 @@ class PhotoStudio extends Component
                 $basicPrompt .= ", Props: {$this->propText}";
             }
 
-            // 5. Call generator
-            $results = $falAiService->generateParallelPayloads($team, $payloads, $this->selectedModel);
+            // 5. Submit to queue
+            $this->queueRequests = [];
+            foreach ($payloads as $index => $payload) {
+                $queueRes = $falAiService->queue($team, $this->selectedModel, $payload);
+                $requestId = $queueRes['request_id'] ?? null;
 
-            // 6. Handle results
-            $successCount = 0;
-            $tempImgs = [];
-            foreach ($results as $index => $res) {
-                if ($res['status'] === 'success') {
-                    $remoteUrl = $res['images'][0]['url'] ?? null;
-                    if ($remoteUrl) {
-                        $ext = pathinfo(parse_url($remoteUrl, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'png';
-                        $destPath = "teams/{$team->id}/influencers/{$this->influencer->id}/photo-studio/photo_".time()."_{$index}.{$ext}";
-
-                        // Download and register with metadata
-                        $localUrl = $falAiService->downloadAndRegister(
-                            $team,
-                            $remoteUrl,
-                            "photo-studio-{$this->influencer->id}",
-                            $destPath,
-                            [
-                                'module' => 'photo-studio',
-                                'settings' => $settings,
-                                'basic_prompt' => $basicPrompt,
-                                'enhanced_prompt' => $prompts[$index] ?? $prompts[0],
-                            ]
-                        );
-
-                        $tempImgs[] = $localUrl;
-                        $successCount++;
-                    }
-                } else {
-                    $this->error = $res['error'] ?? 'Generation failed.';
+                if (! $requestId) {
+                    throw new \Exception('No request ID returned from FAL.AI Queue.');
                 }
+
+                $this->queueRequests[] = [
+                    'request_id' => $requestId,
+                    'model' => $this->selectedModel,
+                    'status' => 'processing',
+                    'queue_status' => 'IN_QUEUE',
+                    'basic_prompt' => $prompts[$index] ?? $prompts[0],
+                    'enhanced_prompt' => null,
+                    'settings' => $settings,
+                ];
             }
 
-            $this->currentImgs = $tempImgs;
-
-            if ($successCount > 0) {
-                Toaster::success(__("{$successCount} Foto(s) erfolgreich generiert!"));
-                $this->dispatch('credits-updated');
-            } else {
-                if (empty($this->error)) {
-                    $this->error = 'No images were generated successfully.';
-                }
-            }
+            $this->generating = true;
+            $this->queueStatus = 'IN_QUEUE';
 
         } catch (\Throwable $e) {
             Log::error('PhotoStudio::generate failed', [
@@ -539,8 +521,96 @@ class PhotoStudio extends Component
             ]);
             $this->error = $e->getMessage();
             Toaster::error(__('Generierung fehlgeschlagen: ').$e->getMessage());
-        } finally {
             $this->generating = false;
+        }
+    }
+
+    public function checkGenerationProgress(): void
+    {
+        if (! $this->generating || empty($this->queueRequests)) {
+            return;
+        }
+
+        $team = $this->influencer->team ?: Team::first();
+        if (! $team) {
+            return;
+        }
+
+        $service = app(FalAiService::class);
+        $tempImgs = $this->currentImgs;
+        $successCount = 0;
+
+        foreach ($this->queueRequests as $index => $req) {
+            if (($req['status'] ?? '') !== 'processing') {
+                continue;
+            }
+
+            $requestId = $req['request_id'];
+            $model = $req['model'];
+
+            try {
+                $statusRes = $service->checkQueueStatus($team, $model, $requestId);
+                $status = $statusRes['status'] ?? 'IN_QUEUE';
+                $this->queueRequests[$index]['queue_status'] = $status;
+
+                // Overall queue status can be the status of the first still-processing item
+                if ($this->queueStatus === 'IN_QUEUE' && $status === 'IN_PROGRESS') {
+                    $this->queueStatus = 'IN_PROGRESS';
+                }
+
+                if ($status === 'COMPLETED') {
+                    $response = $service->getQueueResponse($team, $model, $requestId);
+                    $remoteUrl = $response['images'][0]['url'] ?? null;
+
+                    if ($remoteUrl) {
+                        $ext = pathinfo(parse_url($remoteUrl, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'png';
+                        $destPath = "teams/{$team->id}/influencers/{$this->influencer->id}/photo-studio/photo_".time()."_{$index}.{$ext}";
+
+                        // Download and register with metadata
+                        $localUrl = $service->downloadAndRegister(
+                            $team,
+                            $remoteUrl,
+                            "photo-studio-{$this->influencer->id}",
+                            $destPath,
+                            [
+                                'module' => 'photo-studio',
+                                'settings' => $req['settings'],
+                                'basic_prompt' => $req['basic_prompt'],
+                                'enhanced_prompt' => $req['enhanced_prompt'],
+                            ]
+                        );
+
+                        $tempImgs[] = $localUrl;
+                        $successCount++;
+                    }
+
+                    $this->queueRequests[$index]['status'] = 'success';
+                } elseif ($status === 'FAILED') {
+                    $this->queueRequests[$index]['status'] = 'failed';
+                    $this->error = 'One of the generations failed on FAL.AI side.';
+                }
+            } catch (\Throwable $e) {
+                Log::error('PhotoStudio::checkGenerationProgress: Failed for index '.$index, [
+                    'error' => $e->getMessage(),
+                ]);
+                $this->queueRequests[$index]['status'] = 'failed';
+                $this->error = $e->getMessage();
+            }
+        }
+
+        $this->currentImgs = $tempImgs;
+
+        if ($successCount > 0) {
+            Toaster::success(__("{$successCount} Foto(s) erfolgreich generiert!"));
+            $this->dispatch('credits-updated');
+        }
+
+        // If nothing is processing anymore, reset state
+        $stillProcessing = collect($this->queueRequests)->contains('status', 'processing');
+        if (! $stillProcessing) {
+            $this->generating = false;
+            $this->queueRequests = [];
+            $this->queueStatus = null;
         }
     }
 

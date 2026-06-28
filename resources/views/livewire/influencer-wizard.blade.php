@@ -1,4 +1,5 @@
-<div class="min-h-screen text-base-content flex flex-col justify-between py-6 px-4 relative overflow-hidden bg-base-200 selection:bg-primary selection:text-primary-content" x-data>
+<div class="min-h-screen text-base-content flex flex-col justify-between py-6 px-4 relative overflow-hidden bg-base-200 selection:bg-primary selection:text-primary-content" x-data
+     @if(collect($generated_variations)->contains('status', 'processing')) wire:poll.2s="checkWizardGenerationProgress" @endif>
     
     {{-- Decorative Side Slideshows --}}
     {{-- Left Side --}}
@@ -574,7 +575,7 @@
                                     {{ ($var['status'] ?? '') === 'success' ? 'cursor-pointer hover:shadow-2xl' : '' }}
                                     {{ $selected_variation_index === $index && ($var['status'] ?? '') === 'success' ? 'border-primary ring-4 ring-primary/20 scale-[1.02]' : 'border-base-300' }}">
                                     
-                                    @if(($var['status'] ?? '') === 'pending')
+                                    @if(in_array($var['status'] ?? '', ['pending', 'processing']))
                                         {{-- Loading Frame --}}
                                         <div class="absolute inset-0 bg-base-300/30 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center space-y-4">
                                             <div class="relative w-16 h-16 flex items-center justify-center">
@@ -586,7 +587,15 @@
                                                 </div>
                                             </div>
                                             <div>
-                                                <span class="text-xs font-extrabold tracking-wider text-slate-500 uppercase animate-pulse">Generating...</span>
+                                                <span class="text-xs font-extrabold tracking-wider text-slate-500 uppercase animate-pulse">
+                                                    @if(($var['queue_status'] ?? '') === 'IN_QUEUE')
+                                                        In Queue...
+                                                    @elseif(($var['queue_status'] ?? '') === 'IN_PROGRESS')
+                                                        Generating...
+                                                    @else
+                                                        Generating...
+                                                    @endif
+                                                </span>
                                             </div>
                                         </div>
                                     @elseif(($var['status'] ?? '') === 'failed')

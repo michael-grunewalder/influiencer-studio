@@ -1,4 +1,5 @@
-<div class="flex flex-col lg:flex-row h-[calc(100vh-4rem)] -mx-6 -my-5 overflow-hidden bg-base-200">
+<div class="flex flex-col lg:flex-row h-[calc(100vh-4rem)] -mx-6 -my-5 overflow-hidden bg-base-200"
+     @if(collect($generationStates)->contains('status', 'generating')) wire:poll.2s="checkGenerationProgress" @endif>
     
     {{-- Left Sidebar: Influencers List --}}
     <aside class="w-full lg:w-80 border-r border-base-300 flex flex-col bg-base-100 flex-shrink-0">
@@ -162,7 +163,15 @@
                                             <div class="absolute inset-0 rounded-full border-4 border-t-primary animate-spin"></div>
                                         </div>
                                         <div>
-                                            <span class="text-xs font-bold tracking-wider text-slate-500 uppercase animate-pulse">Generating...</span>
+                                            <span class="text-xs font-bold tracking-wider text-slate-500 uppercase animate-pulse">
+                                                @if(($generationStates['avatar']['queue_status'] ?? '') === 'IN_QUEUE')
+                                                    In Queue...
+                                                @elseif(($generationStates['avatar']['queue_status'] ?? '') === 'IN_PROGRESS')
+                                                    Generating...
+                                                @else
+                                                    Generating...
+                                                @endif
+                                            </span>
                                         </div>
                                     </div>
                                 @elseif(($generationStates['avatar']['status'] ?? '') === 'failed')
@@ -257,7 +266,15 @@
                                             <div class="absolute inset-0 rounded-full border-4 border-t-primary animate-spin"></div>
                                         </div>
                                         <div>
-                                            <span class="text-xs font-bold tracking-wider text-slate-500 uppercase animate-pulse">Generating...</span>
+                                            <span class="text-xs font-bold tracking-wider text-slate-500 uppercase animate-pulse">
+                                                @if(($generationStates['character_sheet']['queue_status'] ?? '') === 'IN_QUEUE')
+                                                    In Queue...
+                                                @elseif(($generationStates['character_sheet']['queue_status'] ?? '') === 'IN_PROGRESS')
+                                                    Generating...
+                                                @else
+                                                    Generating...
+                                                @endif
+                                            </span>
                                         </div>
                                     </div>
                                 @elseif(($generationStates['character_sheet']['status'] ?? '') === 'failed')
@@ -342,7 +359,15 @@
                                                 <div class="absolute inset-0 rounded-full border-4 border-t-primary animate-spin"></div>
                                             </div>
                                             <div>
-                                                <span class="text-xs font-bold tracking-wider text-slate-500 uppercase animate-pulse">Generating...</span>
+                                                <span class="text-xs font-bold tracking-wider text-slate-500 uppercase animate-pulse">
+                                                    @if(($generationStates['closeup']['queue_status'] ?? '') === 'IN_QUEUE')
+                                                        In Queue...
+                                                    @elseif(($generationStates['closeup']['queue_status'] ?? '') === 'IN_PROGRESS')
+                                                        Generating...
+                                                    @else
+                                                        Generating...
+                                                    @endif
+                                                </span>
                                             </div>
                                         </div>
                                     @elseif(($generationStates['closeup']['status'] ?? '') === 'failed')
@@ -415,7 +440,15 @@
                                                 <div class="absolute inset-0 rounded-full border-4 border-t-primary animate-spin"></div>
                                             </div>
                                             <div>
-                                                <span class="text-xs font-bold tracking-wider text-slate-500 uppercase animate-pulse">Generating...</span>
+                                                <span class="text-xs font-bold tracking-wider text-slate-500 uppercase animate-pulse">
+                                                    @if(($generationStates['detail_sheet']['queue_status'] ?? '') === 'IN_QUEUE')
+                                                        In Queue...
+                                                    @elseif(($generationStates['detail_sheet']['queue_status'] ?? '') === 'IN_PROGRESS')
+                                                        Generating...
+                                                    @else
+                                                        Generating...
+                                                    @endif
+                                                </span>
                                             </div>
                                         </div>
                                     @elseif(($generationStates['detail_sheet']['status'] ?? '') === 'failed')

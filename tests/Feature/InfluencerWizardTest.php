@@ -48,6 +48,15 @@ test('influencer wizard can progress and create an influencer with credit system
 
     // Mock Fal.ai image generation API and remote image downloads
     Http::fake([
+        'https://queue.fal.run/*/requests/*/status' => Http::response(['status' => 'COMPLETED'], 200),
+        'https://queue.fal.run/*/requests/*' => Http::response([
+            'images' => [
+                ['url' => 'https://v3.fal.media/files/mock-image.png'],
+            ],
+        ], 200),
+        'https://queue.fal.run/*' => Http::response([
+            'request_id' => 'mock_123',
+        ], 200),
         'https://fal.run/*' => Http::response([
             'images' => [
                 ['url' => 'https://v3.fal.media/files/mock-image.png'],
@@ -92,14 +101,16 @@ test('influencer wizard can progress and create an influencer with credit system
 
     // Call generate to call Fal.ai API
     $test->call('generate')
-        ->assertSet('is_generating', false)
-        ->assertSet('generated_variations', function ($vars) {
-            return is_array($vars) &&
-                   count($vars) === 3 &&
-                   ($vars[0]['url'] ?? '') === 'https://v3.fal.media/files/mock-image.png' &&
-                   ($vars[1]['url'] ?? '') === 'https://v3.fal.media/files/mock-image.png' &&
-                   ($vars[2]['url'] ?? '') === 'https://v3.fal.media/files/mock-image.png';
-        });
+        ->assertSet('is_generating', true)
+        ->call('checkWizardGenerationProgress')
+        ->assertSet('is_generating', false);
+    $test->assertSet('generated_variations', function ($vars) {
+        return is_array($vars) &&
+               count($vars) === 3 &&
+               ($vars[0]['url'] ?? '') === 'https://v3.fal.media/files/mock-image.png' &&
+               ($vars[1]['url'] ?? '') === 'https://v3.fal.media/files/mock-image.png' &&
+               ($vars[2]['url'] ?? '') === 'https://v3.fal.media/files/mock-image.png';
+    });
 
     // Check that credits were charged (3 images * $0.35 = $1.05 deducted from $10.00 = $8.95)
     $team->refresh();

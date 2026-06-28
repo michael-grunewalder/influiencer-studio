@@ -81,6 +81,15 @@ test('user can generate and download sheet images', function () {
     // Mock API key and fake HTTP responses for Fal.ai
     config(['services.fal.key' => 'mock-global-key', 'fal_api.key' => 'mock-global-key']);
     Http::fake([
+        'https://queue.fal.run/*/requests/*/status' => Http::response(['status' => 'COMPLETED'], 200),
+        'https://queue.fal.run/*/requests/*' => Http::response([
+            'images' => [
+                ['url' => 'https://v3.fal.media/files/mock-image.png'],
+            ],
+        ], 200),
+        'https://queue.fal.run/*' => Http::response([
+            'request_id' => 'mock_123',
+        ], 200),
         'https://fal.run/*' => Http::response([
             'images' => [
                 ['url' => 'https://v3.fal.media/files/mock-image.png'],
@@ -104,10 +113,12 @@ test('user can generate and download sheet images', function () {
         ->test(Dashboard::class)
         ->set('selectedId', $influencer->id)
         ->call('generateImage', 'character_sheet')
+        ->assertHasNoErrors()
+        ->call('checkGenerationProgress')
         ->assertHasNoErrors();
 
     Http::assertSent(function (Request $request) {
-        if ($request->url() !== 'https://fal.run/openai/gpt-image-2/edit') {
+        if ($request->url() !== 'https://queue.fal.run/openai/gpt-image-2/edit') {
             return false;
         }
         $payload = $request->data();

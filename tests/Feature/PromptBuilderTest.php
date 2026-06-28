@@ -306,8 +306,59 @@ test('prompt builder generates photo studio prompt with custom location and pose
 
     expect($prompt)->toContain('Street style photo of the subject from @image1');
     expect($prompt)->toContain('wearing the complete outfit from @image2');
-    expect($prompt)->toContain('Subject is standing upright on both feet');
+    expect($prompt)->not->toContain('Subject is standing upright on both feet');
+    expect($prompt)->not->toContain('Subject is clearly seated');
     expect($prompt)->toContain('leaning against a neon sign post, arms crossed');
     expect($prompt)->toContain('The location is a high-tech cyber street in Tokyo.');
     expect($prompt)->not->toContain('Modify the base image @image1');
+    expect($prompt)->not->toContain('9:16, chest-up framing');
+});
+
+test('prompt builder omits stance prefix and default framing when custom pose is provided', function () {
+    $properties = new InfluencerProperties(
+        gender: 'female',
+        age: 25,
+        niche: ['Fashion'],
+        backstory: 'Travel model.',
+        personality: 50,
+        ethnicity: 'East Asian',
+        skin_tone: 'Light',
+        hair_color: 'Brunette',
+        hair_length: 'Medium',
+        hair_texture: 'Wavy',
+        eye_color: 'Dark',
+        build: 'Petite',
+    );
+
+    $influencer = new Influencer([
+        'name' => 'Elena',
+        'properties' => $properties,
+    ]);
+
+    $args = [
+        'influencer' => $influencer,
+        'location' => 'park',
+        'timeOfDay' => 'afternoon',
+        'pose' => null,
+        'poseText' => 'subject sitting on the ground, legs gently pulled towards the body, full body shot, feet visible',
+        'vibe' => 'candid',
+        'stance' => 'standing', // even if stance is set to standing, it should be ignored/omitted!
+        'aspectRatio' => '16:9',
+        'expression' => 'laughing',
+        'gaze' => 'at-camera',
+        'faceTag' => '@image1',
+    ];
+
+    $prompt = PromptBuilderService::buildPhotoStudioPrompt($args);
+
+    // Stance prefixes must be completely omitted
+    expect($prompt)->not->toContain('Subject is standing upright');
+    expect($prompt)->not->toContain('Subject is clearly seated');
+
+    // Default framing suffix must be omitted
+    expect($prompt)->not->toContain('16:9, waist-up');
+    expect($prompt)->not->toContain('9:16, chest-up');
+
+    // Custom pose text and other elements must be retained correctly
+    expect($prompt)->toContain('subject sitting on the ground, legs gently pulled towards the body, full body shot, feet visible');
 });
