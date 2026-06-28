@@ -17,7 +17,15 @@ class TeamAsset extends Model
         'remote_url',
         'mime_type',
         'purpose',
+        'meta_data',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'meta_data' => 'array',
+        ];
+    }
 
     public function team(): BelongsTo
     {

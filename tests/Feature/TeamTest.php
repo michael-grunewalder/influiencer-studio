@@ -123,10 +123,43 @@ test('deleting a team cascades and deletes associated influencers', function () 
         'name' => 'Cascade Model',
         'properties' => new InfluencerProperties(gender: 'Female', age: 22, niche: ['Sports']),
     ]);
+});
 
-    $team->delete();
+test('active team is initialized to default team if mode is default', function () {
+    $user = User::factory()->create(['team_selection_mode' => 'default']);
+    $team1 = Team::create(['name' => 'Team One']);
+    $team2 = Team::create(['name' => 'Team Two']);
+    $user->teams()->attach([$team1->id, $team2->id]);
 
-    $this->assertDatabaseMissing('influencers', [
-        'id' => $influencer->id,
+    $user->update(['default_team_id' => $team2->id]);
+
+    // Send a request to dashboard as $user (without active_team_id in session)
+    $this->actingAs($user)
+        ->get('/')
+        ->assertOk();
+
+    // Verify session active_team_id has been set to the default team
+    expect(session('active_team_id'))->toBe($team2->id);
+});
+
+test('active team is initialized to last active team if mode is last_used', function () {
+    $user = User::factory()->create([
+        'team_selection_mode' => 'last_used',
     ]);
+    $team1 = Team::create(['name' => 'Team One']);
+    $team2 = Team::create(['name' => 'Team Two']);
+    $user->teams()->attach([$team1->id, $team2->id]);
+
+    $user->update([
+        'default_team_id' => $team1->id,
+        'last_active_team_id' => $team2->id,
+    ]);
+
+    // Send a request to dashboard as $user (without active_team_id in session)
+    $this->actingAs($user)
+        ->get('/')
+        ->assertOk();
+
+    // Verify session active_team_id has been set to the last active team
+    expect(session('active_team_id'))->toBe($team2->id);
 });

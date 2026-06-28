@@ -1,4 +1,5 @@
-<div class="min-h-screen text-base-content flex flex-col justify-between py-6 px-4 relative overflow-hidden bg-base-200 selection:bg-primary selection:text-primary-content" x-data>
+<div class="min-h-screen text-base-content flex flex-col justify-between py-6 px-4 relative overflow-hidden bg-base-200 selection:bg-primary selection:text-primary-content" x-data
+     @if(collect($generated_variations)->contains('status', 'processing')) wire:poll.2s="checkWizardGenerationProgress" @endif>
     
     {{-- Decorative Side Slideshows --}}
     {{-- Left Side --}}
@@ -123,26 +124,28 @@
         </div>
 
         {{-- Glowing Top Promo Banners --}}
-        @if($step <= 4)
+        @if($step <= 4 && (! $this->activeTeam?->fal_api_key || ! $this->activeTeam?->claude_api_key))
             <div class="w-full max-w-2xl flex flex-col gap-3 mb-8 px-4">
-                <div class="alert alert-info shadow-sm rounded-2xl p-4 flex items-center justify-between gap-4 border border-info/20 bg-info/5">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-info text-info-content flex items-center justify-center shadow">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                            </svg>
+                @if(! $this->activeTeam?->fal_api_key)
+                    <div class="alert alert-info shadow-sm rounded-2xl p-4 flex items-center justify-between gap-4 border border-info/20 bg-info/5">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-info text-info-content flex items-center justify-center shadow">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                </svg>
+                            </div>
+                            <div class="text-left">
+                                <h4 class="font-extrabold text-sm text-info tracking-wide uppercase">{{ __('dialogs.api.fal.label') }}</h4>
+                                <p class="text-xs text-slate-500 mt-0.5">{{ __('dialogs.api.fal.description') }}</p>
+                            </div>
                         </div>
-                        <div class="text-left">
-                            <h4 class="font-extrabold text-sm text-info tracking-wide uppercase">Connect to Higgsfield</h4>
-                            <p class="text-xs text-slate-500 mt-0.5">Integrate video generation capabilities directly.</p>
-                        </div>
+                        <button type="button" wire:click="openConnectModal" class="btn btn-sm btn-info text-info-content font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-sm">
+                            {{__('dialogs.api.fal.button')}} <span class="font-mono">→</span>
+                        </button>
                     </div>
-                    <button class="btn btn-sm btn-info text-info-content font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-sm">
-                        Connect <span class="font-mono">→</span>
-                    </button>
-                </div>
+                @endif
 
-                @if($step === 1)
+                @if(! $this->activeTeam?->claude_api_key)
                     <div class="alert alert-warning shadow-sm rounded-2xl p-4 flex items-center justify-between gap-4 border border-warning/20 bg-warning/5">
                         <div class="flex items-center gap-3">
                             <div class="w-10 h-10 rounded-xl bg-warning text-warning-content flex items-center justify-center shadow">
@@ -151,12 +154,12 @@
                                 </svg>
                             </div>
                             <div class="text-left">
-                                <h4 class="font-extrabold text-sm text-warning tracking-wide uppercase">Connect Claude for smarter prompts</h4>
-                                <p class="text-xs text-slate-500 mt-0.5">Let AI enhance your backstory and visual traits automatically.</p>
+                                <h4 class="font-extrabold text-sm text-warning tracking-wide uppercase">{{ __('dialogs.api.claude.label') }}</h4>
+                                <p class="text-xs text-slate-500 mt-0.5">{{ __('dialogs.api.claude.description') }}</p>
                             </div>
                         </div>
-                        <button class="btn btn-sm btn-warning text-warning-content font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-sm">
-                            Connect <span class="font-mono">→</span>
+                        <button type="button" wire:click="openConnectModal" class="btn btn-sm btn-warning text-warning-content font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-sm">
+                            {{ __('dialogs.api.claude.button') }} <span class="font-mono">→</span>
                         </button>
                     </div>
                 @endif
@@ -572,7 +575,7 @@
                                     {{ ($var['status'] ?? '') === 'success' ? 'cursor-pointer hover:shadow-2xl' : '' }}
                                     {{ $selected_variation_index === $index && ($var['status'] ?? '') === 'success' ? 'border-primary ring-4 ring-primary/20 scale-[1.02]' : 'border-base-300' }}">
                                     
-                                    @if(($var['status'] ?? '') === 'pending')
+                                    @if(in_array($var['status'] ?? '', ['pending', 'processing']))
                                         {{-- Loading Frame --}}
                                         <div class="absolute inset-0 bg-base-300/30 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center space-y-4">
                                             <div class="relative w-16 h-16 flex items-center justify-center">
@@ -584,7 +587,15 @@
                                                 </div>
                                             </div>
                                             <div>
-                                                <span class="text-xs font-extrabold tracking-wider text-slate-500 uppercase animate-pulse">Generating...</span>
+                                                <span class="text-xs font-extrabold tracking-wider text-slate-500 uppercase animate-pulse">
+                                                    @if(($var['queue_status'] ?? '') === 'IN_QUEUE')
+                                                        In Queue...
+                                                    @elseif(($var['queue_status'] ?? '') === 'IN_PROGRESS')
+                                                        Generating...
+                                                    @else
+                                                        Generating...
+                                                    @endif
+                                                </span>
                                             </div>
                                         </div>
                                     @elseif(($var['status'] ?? '') === 'failed')
@@ -704,5 +715,18 @@
     <footer class="max-w-7xl w-full mx-auto text-center text-xs text-slate-500 px-4 mt-8 relative z-20">
         <p>&copy; {{ date('Y') }} Influencer Studio. All rights reserved. Powered by Higgsfield & Claude.</p>
     </footer>
+
+    <!-- API Keys Modal -->
+    <x-modal wire:model="showConnectModal" title="API-Schlüssel verbinden">
+        <x-form wire:submit="saveApiKeys">
+            <x-input label="FAL.AI API Key" wire:model="fal_api_key" type="password" placeholder="fal_..." />
+            <x-input label="Claude API Key" wire:model="claude_api_key" type="password" placeholder="sk-ant-..." />
+
+            <x-slot:actions>
+                <x-button label="Abbrechen" wire:click="$set('showConnectModal', false)" class="btn-ghost" />
+                <x-button label="Speichern" type="submit" class="btn-primary font-bold rounded-xl px-5" spinner="saveApiKeys" />
+            </x-slot:actions>
+        </x-form>
+    </x-modal>
 
 </div>

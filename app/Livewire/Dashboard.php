@@ -108,6 +108,9 @@ class Dashboard extends Component
     public function updatedSelectedTeamId(string $value): void
     {
         session(['active_team_id' => $value]);
+        if (auth()->check()) {
+            auth()->user()->update(['last_active_team_id' => $value]);
+        }
         $this->dispatch('credits-updated');
         $first = $this->influencers->first();
         if ($first) {
@@ -141,11 +144,13 @@ class Dashboard extends Component
     #[Computed]
     public function selectedInfluencer()
     {
-        if (! $this->selectedId) {
+        if (! $this->selectedId || ! $this->selectedTeamId) {
             return null;
         }
 
-        return Influencer::find($this->selectedId);
+        return Influencer::where('id', $this->selectedId)
+            ->where('team_id', $this->selectedTeamId)
+            ->first();
     }
 
     public function selectInfluencer(string $id): void
@@ -178,14 +183,17 @@ class Dashboard extends Component
 
     public function deleteInfluencer(string $id): void
     {
-        $influencer = Influencer::find($id);
+        $influencer = Influencer::where('id', $id)
+            ->where('team_id', $this->selectedTeamId)
+            ->first();
+
         if ($influencer) {
             $influencer->delete();
             Toaster::success(__('Influencer gelöscht.'));
         }
 
         if ($this->selectedId === $id) {
-            $next = Influencer::first();
+            $next = Influencer::where('team_id', $this->selectedTeamId)->latest()->first();
             if ($next) {
                 $this->selectInfluencer($next->id);
             } else {
@@ -289,6 +297,8 @@ class Dashboard extends Component
                 $prompt = 'Professional turnaround sheet of the character.';
             }
 
+            PromptBuilderService::logPrompt($prompt, null, 'Dashboard: '.ucfirst($field));
+
             // Resolve avatar as reference image
             $uploadedUrl = null;
             if ($influencer->avatar) {
@@ -306,8 +316,8 @@ class Dashboard extends Component
             }
 
             // Resolve Ideogram model config
-            //$modelKey = in_array($field, $useGPT2) ? 'gpt2' : 'ideogram';
-            $modelKey = ($field !==  'avatar') ? 'gpt2' : 'ideogram';
+            // $modelKey = in_array($field, $useGPT2) ? 'gpt2' : 'ideogram';
+            $modelKey = ($field !== 'avatar') ? 'gpt2' : 'ideogram';
             $modelConfig = config("image_models.models.{$modelKey}");
             if (! $modelConfig) {
                 throw new \Exception('Model configuration for Ideogram not found.');
@@ -361,39 +371,21 @@ class Dashboard extends Component
                 }
             }
 
-            // Call FAL.AI
-            $results = app(FalAiService::class)->generateParallelPayloads($team, [$payload], $selectedModel);
-            $res = $results[0] ?? null;
+            // Call FAL.AI Queue
+            $res = app(FalAiService::class)->queue($team, $selectedModel, $payload);
+            $requestId = $res['request_id'] ?? null;
 
-            if ($res && $res['status'] === 'success') {
-                $remoteUrl = $res['images'][0]['url'] ?? null;
-                if (! $remoteUrl) {
-                    throw new \Exception('No image URL returned from FAL.AI.');
-                }
-
-                $ext = pathinfo(parse_url($remoteUrl, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'png';
-                if ($field === 'avatar') {
-                    $destPath = "teams/{$team->id}/influencers/{$influencer->id}/avatar.{$ext}";
-                    $localUrl = app(FalAiService::class)->downloadAndRegister($team, $remoteUrl, 'avatar', $destPath);
-                    $influencer->update(['avatar' => $localUrl]);
-                } else {
-                    $destPath = "teams/{$team->id}/influencers/{$influencer->id}/references/{$field}_".time().".{$ext}";
-                    $localUrl = app(FalAiService::class)->downloadAndRegister($team, $remoteUrl, $field, $destPath);
-                    $props = $influencer->properties ?? new InfluencerProperties;
-                    $props->{$field} = $localUrl;
-                    $influencer->update(['properties' => $props]);
-                }
-
-                $influencer->refresh();
-
-                // Clear generation state on success
-                unset($this->generationStates[$field]);
-                Toaster::success(__(':field erfolgreich generiert!', ['field' => ucfirst(str_replace('_', ' ', $field))]));
-            } else {
-                $errorMsg = $res['error'] ?? 'Unknown generation error';
-                $this->generationStates[$field] = ['status' => 'failed', 'error' => $errorMsg];
-                Toaster::error(__('Fehler bei der Generierung: :error', ['error' => $errorMsg]));
+            if (! $requestId) {
+                throw new \Exception('No request ID returned from FAL.AI Queue.');
             }
+
+            $this->generationStates[$field] = [
+                'status' => 'generating',
+                'request_id' => $requestId,
+                'model' => $selectedModel,
+                'queue_status' => 'IN_QUEUE',
+                'error' => null,
+            ];
         } catch (\Throwable $e) {
             Log::error("Dashboard::generateImage error: {$e->getMessage()}", [
                 'field' => $field,
@@ -401,6 +393,81 @@ class Dashboard extends Component
             ]);
             $this->generationStates[$field] = ['status' => 'failed', 'error' => $e->getMessage()];
             Toaster::error(__('Ausnahme aufgetreten: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+    public function checkGenerationProgress(): void
+    {
+        $influencer = $this->selectedInfluencer;
+        if (! $influencer) {
+            return;
+        }
+
+        $team = Team::find($influencer->team_id) ?: Team::first();
+        if (! $team) {
+            return;
+        }
+
+        $service = app(FalAiService::class);
+
+        foreach ($this->generationStates as $field => $state) {
+            if (($state['status'] ?? '') !== 'generating') {
+                continue;
+            }
+
+            $requestId = $state['request_id'] ?? null;
+            $model = $state['model'] ?? null;
+
+            if (! $requestId || ! $model) {
+                continue;
+            }
+
+            try {
+                $statusRes = $service->checkQueueStatus($team, $model, $requestId);
+                $status = $statusRes['status'] ?? 'IN_QUEUE';
+                $this->generationStates[$field]['queue_status'] = $status;
+
+                if ($status === 'COMPLETED') {
+                    $response = $service->getQueueResponse($team, $model, $requestId);
+                    $remoteUrl = $response['images'][0]['url'] ?? null;
+
+                    if (! $remoteUrl) {
+                        throw new \Exception('No image URL returned from FAL.AI Queue response.');
+                    }
+
+                    $ext = pathinfo(parse_url($remoteUrl, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'png';
+                    if ($field === 'avatar') {
+                        $destPath = "teams/{$team->id}/influencers/{$influencer->id}/avatar.{$ext}";
+                        $localUrl = $service->downloadAndRegister($team, $remoteUrl, 'avatar', $destPath);
+                        $influencer->update(['avatar' => $localUrl]);
+                    } else {
+                        $destPath = "teams/{$team->id}/influencers/{$influencer->id}/references/{$field}_".time().".{$ext}";
+                        $localUrl = $service->downloadAndRegister($team, $remoteUrl, $field, $destPath);
+                        $props = $influencer->properties ?? new InfluencerProperties;
+                        $props->{$field} = $localUrl;
+                        $influencer->update(['properties' => $props]);
+                    }
+
+                    $influencer->refresh();
+                    unset($this->generationStates[$field]);
+                    Toaster::success(__(':field erfolgreich generiert!', ['field' => ucfirst(str_replace('_', ' ', $field))]));
+                } elseif ($status === 'FAILED') {
+                    $this->generationStates[$field] = [
+                        'status' => 'failed',
+                        'error' => 'Generation failed on FAL.AI side.',
+                    ];
+                    Toaster::error(__('Fehler bei der Generierung: :error', ['error' => 'FAL.AI queue task failed.']));
+                }
+            } catch (\Throwable $e) {
+                Log::error('Dashboard::checkGenerationProgress: Failed for field '.$field, [
+                    'error' => $e->getMessage(),
+                ]);
+                $this->generationStates[$field] = [
+                    'status' => 'failed',
+                    'error' => $e->getMessage(),
+                ];
+                Toaster::error(__('Ausnahme aufgetreten: :error', ['error' => $e->getMessage()]));
+            }
         }
     }
 
@@ -688,7 +755,12 @@ class Dashboard extends Component
 
     public function selectOutfit(string $id): void
     {
-        $outfit = Outfit::find($id);
+        $influencer = $this->selectedInfluencer;
+        if (! $influencer) {
+            return;
+        }
+
+        $outfit = $influencer->outfits()->find($id);
         if ($outfit) {
             $this->outfit_top = $outfit->top ?? '';
             $this->outfit_bottom = $outfit->bottom ?? '';
@@ -701,7 +773,12 @@ class Dashboard extends Component
 
     public function deleteOutfit(string $id): void
     {
-        $outfit = Outfit::find($id);
+        $influencer = $this->selectedInfluencer;
+        if (! $influencer) {
+            return;
+        }
+
+        $outfit = $influencer->outfits()->find($id);
         if ($outfit) {
             $outfit->delete();
             Toaster::success(__('Outfit gelöscht.'));

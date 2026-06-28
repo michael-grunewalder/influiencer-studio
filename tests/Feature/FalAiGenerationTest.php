@@ -65,11 +65,14 @@ test('wizard uses text-to-image ideogram v4 when no reference is provided', func
     config(['fal_api.key' => 'mock-key', 'services.fal.key' => 'mock-key']);
 
     Http::fake([
-        'https://fal.run/ideogram/v4' => Http::response([
-            'images' => [
-                ['url' => 'https://v3.fal.media/files/mock-generation-1.png'],
-            ],
-        ], 200),
+        'https://queue.fal.run/ideogram/v4/requests/*/status' => Http::response(['status' => 'COMPLETED'], 200),
+        'https://queue.fal.run/ideogram/v4/requests/mock_1' => Http::response(['images' => [['url' => 'https://v3.fal.media/files/mock-generation-1.png']]], 200),
+        'https://queue.fal.run/ideogram/v4/requests/mock_2' => Http::response(['images' => [['url' => 'https://v3.fal.media/files/mock-generation-2.png']]], 200),
+        'https://queue.fal.run/ideogram/v4/requests/mock_3' => Http::response(['images' => [['url' => 'https://v3.fal.media/files/mock-generation-3.png']]], 200),
+        'https://queue.fal.run/ideogram/v4' => Http::sequence()
+            ->push(['request_id' => 'mock_1'])
+            ->push(['request_id' => 'mock_2'])
+            ->push(['request_id' => 'mock_3']),
     ]);
 
     $test = Livewire::actingAs($user)
@@ -85,6 +88,9 @@ test('wizard uses text-to-image ideogram v4 when no reference is provided', func
         ->set('aesthetic_vibe', 'Minimalist')
         ->call('nextStep') // Step 5
         ->call('generate')
+        ->assertSet('is_generating', true)
+        ->call('checkWizardGenerationProgress')
+        ->assertSet('is_generating', false)
         ->assertSet('generated_variations', function ($vars) {
             return is_array($vars) &&
                    count($vars) === 3 &&
@@ -94,7 +100,7 @@ test('wizard uses text-to-image ideogram v4 when no reference is provided', func
         });
 
     Http::assertSent(function (Request $request) {
-        if ($request->url() !== 'https://fal.run/ideogram/v4') {
+        if ($request->url() !== 'https://queue.fal.run/ideogram/v4') {
             return false;
         }
         $payload = $request->data();
@@ -120,11 +126,14 @@ test('wizard uses image-to-image ideogram v4 when reference image is uploaded', 
             'file_url' => 'https://v3.fal.media/files/uploaded-face.png',
         ], 200),
         'https://presigned-s3-upload-url.com/put-here' => Http::response([], 200),
-        'https://fal.run/ideogram/v4/image-to-image' => Http::response([
-            'images' => [
-                ['url' => 'https://v3.fal.media/files/mock-img2img-1.png'],
-            ],
-        ], 200),
+        'https://queue.fal.run/ideogram/v4/requests/*/status' => Http::response(['status' => 'COMPLETED'], 200),
+        'https://queue.fal.run/ideogram/v4/requests/mock_img2img_1' => Http::response(['images' => [['url' => 'https://v3.fal.media/files/mock-img2img-1.png']]], 200),
+        'https://queue.fal.run/ideogram/v4/requests/mock_img2img_2' => Http::response(['images' => [['url' => 'https://v3.fal.media/files/mock-img2img-2.png']]], 200),
+        'https://queue.fal.run/ideogram/v4/requests/mock_img2img_3' => Http::response(['images' => [['url' => 'https://v3.fal.media/files/mock-img2img-3.png']]], 200),
+        'https://queue.fal.run/ideogram/v4/image-to-image' => Http::sequence()
+            ->push(['request_id' => 'mock_img2img_1'])
+            ->push(['request_id' => 'mock_img2img_2'])
+            ->push(['request_id' => 'mock_img2img_3']),
     ]);
 
     $test = Livewire::actingAs($user)
@@ -141,6 +150,9 @@ test('wizard uses image-to-image ideogram v4 when reference image is uploaded', 
         ->set('aesthetic_vibe', 'Minimalist')
         ->call('nextStep') // Step 5
         ->call('generate')
+        ->assertSet('is_generating', true)
+        ->call('checkWizardGenerationProgress')
+        ->assertSet('is_generating', false)
         ->assertSet('generated_variations', function ($vars) {
             return is_array($vars) &&
                    count($vars) === 3 &&
@@ -150,7 +162,7 @@ test('wizard uses image-to-image ideogram v4 when reference image is uploaded', 
         });
 
     Http::assertSent(function (Request $request) {
-        if ($request->url() !== 'https://fal.run/ideogram/v4/image-to-image') {
+        if ($request->url() !== 'https://queue.fal.run/ideogram/v4/image-to-image') {
             return false;
         }
         $payload = $request->data();
@@ -171,18 +183,23 @@ test('wizard handles partial generation failure and retry successfully', functio
 
     // Mock first call: 2 success, 1 failure (request 3)
     Http::fake(function (Request $request) {
-        if ($request->url() === 'https://fal.run/ideogram/v4') {
-            static $count = 0;
-            $count++;
-            if ($count === 3) {
-                return Http::response(['detail' => 'Safety filter triggered'], 400);
-            }
+        if ($request->url() === 'https://queue.fal.run/ideogram/v4') {
+            static $postCount = 0;
+            $postCount++;
 
-            return Http::response([
-                'images' => [
-                    ['url' => 'https://v3.fal.media/files/success-'.$count.'.png'],
-                ],
-            ], 200);
+            return Http::response(['request_id' => 'mock_'.$postCount], 200);
+        }
+        if (str_contains($request->url(), '/requests/') && str_contains($request->url(), '/status')) {
+            return Http::response(['status' => 'COMPLETED'], 200);
+        }
+        if (str_ends_with($request->url(), '/requests/mock_1')) {
+            return Http::response(['images' => [['url' => 'https://v3.fal.media/files/success-1.png']]], 200);
+        }
+        if (str_ends_with($request->url(), '/requests/mock_2')) {
+            return Http::response(['images' => [['url' => 'https://v3.fal.media/files/success-2.png']]], 200);
+        }
+        if (str_ends_with($request->url(), '/requests/mock_3')) {
+            return Http::response(['detail' => 'Safety filter triggered'], 400);
         }
     });
 
@@ -198,7 +215,10 @@ test('wizard handles partial generation failure and retry successfully', functio
         ->call('nextStep') // Step 4
         ->set('aesthetic_vibe', 'Minimalist')
         ->call('nextStep') // Step 5
-        ->call('generate');
+        ->call('generate')
+        ->assertSet('is_generating', true)
+        ->call('checkWizardGenerationProgress')
+        ->assertSet('is_generating', false);
 
     // Assert first two are success, third is failed
     $test->assertSet('generated_variations', function ($vars) {
@@ -217,15 +237,22 @@ test('wizard handles partial generation failure and retry successfully', functio
     expect((float) $team->credits)->toBe(9.30);
 
     // Call retry for the failed variation (index 2)
-    Http::fake([
-        'https://fal.run/ideogram/v4' => Http::response([
-            'images' => [
-                ['url' => 'https://v3.fal.media/files/retry-success.png'],
-            ],
-        ], 200),
-    ]);
+    Http::fake(function (Request $request) {
+        if ($request->url() === 'https://queue.fal.run/ideogram/v4') {
+            return Http::response(['request_id' => 'mock_4'], 200);
+        }
+        if (str_contains($request->url(), '/requests/mock_4/status')) {
+            return Http::response(['status' => 'COMPLETED'], 200);
+        }
+        if (str_ends_with($request->url(), '/requests/mock_4')) {
+            return Http::response(['images' => [['url' => 'https://v3.fal.media/files/success-4.png']]], 200);
+        }
+    });
 
-    $test->call('retryGeneration', 2);
+    $test->call('retryGeneration', 2)
+        ->assertSet('is_generating', true)
+        ->call('checkWizardGenerationProgress')
+        ->assertSet('is_generating', false);
 
     $test->assertSet('generated_variations', function ($vars) {
         return is_array($vars) &&

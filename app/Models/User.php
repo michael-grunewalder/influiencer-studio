@@ -7,6 +7,7 @@ use App\Notifications\ResetPasswordNotification;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -33,6 +34,9 @@ class User extends Authenticatable implements HasPasskeys
         'password',
         'avatar',
         'credits',
+        'default_team_id',
+        'team_selection_mode',
+        'last_active_team_id',
     ];
 
     /**
@@ -93,6 +97,16 @@ class User extends Authenticatable implements HasPasskeys
     public function teams(): BelongsToMany
     {
         return $this->belongsToMany(Team::class)->withPivot('role');
+    }
+
+    public function defaultTeam(): BelongsTo
+    {
+        return $this->belongsTo(Team::class, 'default_team_id');
+    }
+
+    public function lastActiveTeam(): BelongsTo
+    {
+        return $this->belongsTo(Team::class, 'last_active_team_id');
     }
 
     public function hasTeamRole(Team|string $team, string|array $roles): bool

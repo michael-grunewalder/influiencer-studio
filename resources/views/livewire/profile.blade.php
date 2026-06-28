@@ -54,6 +54,33 @@
                     </x-slot:actions>
                 </x-form>
             </x-card>
+            <x-card title="Standard-Team & Login-Einstellungen" shadow separator>
+                <x-form wire:submit="updateTeamSettings">
+                    <x-select
+                        label="Standard-Team"
+                        placeholder="Kein Standard-Team ausgewählt"
+                        icon="o-users"
+                        :options="$this->teams"
+                        wire:model="default_team_id"
+                    />
+
+                    <div class="mt-4">
+                        <x-radio
+                            label="Team-Auswahl beim Login"
+                            wire:model="team_selection_mode"
+                            :options="[
+                                ['id' => 'default', 'name' => 'Immer Standard-Team auswählen'],
+                                ['id' => 'last_used', 'name' => 'Zuletzt verwendetes Team aktivieren']
+                            ]"
+                        />
+                    </div>
+
+                    <x-slot:actions>
+                        <x-button label="Speichern" type="submit" class="btn-primary" spinner="updateTeamSettings" />
+                    </x-slot:actions>
+                </x-form>
+            </x-card>
+
             <x-card title="{{__('Passkey Einrichten')}}" shadow separator>
                 <livewire:passkeys />
             </x-card>

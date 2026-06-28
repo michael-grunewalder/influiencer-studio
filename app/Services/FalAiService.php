@@ -6,6 +6,7 @@ use App\Models\Team;
 use App\Models\TeamAsset;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -548,7 +549,7 @@ class FalAiService
     /**
      * Download a remote asset (e.g. from fal.ai) and register it in the team_assets registry.
      */
-    public function downloadAndRegister(Team $team, string $remoteUrl, string $purpose, string $destPath): string
+    public function downloadAndRegister(Team $team, string $remoteUrl, string $purpose, string $destPath, ?array $metaData = null): string
     {
         try {
             // If it is a local URL already (e.g. mock), copy it
@@ -569,6 +570,7 @@ class FalAiService
                         'remote_url' => $remoteUrl,
                         'mime_type' => mime_content_type($srcPath) ?: 'image/png',
                         'purpose' => $purpose,
+                        'meta_data' => $metaData,
                     ]);
 
                     return $localUrl;
@@ -592,6 +594,7 @@ class FalAiService
                     'remote_url' => $remoteUrl,
                     'mime_type' => $mimeType,
                     'purpose' => $purpose,
+                    'meta_data' => $metaData,
                 ]);
 
                 return $localUrl;
@@ -610,5 +613,163 @@ class FalAiService
         }
 
         return $remoteUrl;
+    }
+
+    /**
+     * Submit an asynchronous queue request to fal.ai.
+     */
+    public function queue(Team $team, string $model, array $payload): array
+    {
+        $resolved = $this->resolveApiKeyAndCharge($team, 1);
+        $apiKey = $resolved['apiKey'];
+
+        if ($apiKey === 'bearny-codes' && app()->environment('local', 'testing')) {
+            return [
+                'request_id' => 'mock_'.uniqid(),
+            ];
+        }
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Key '.$apiKey,
+                'Content-Type' => 'application/json',
+            ])->timeout(30)->post("https://queue.fal.run/{$model}", $payload);
+
+            if ($response->failed()) {
+                Log::error('FalAiService::queue: Submission failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                throw new \Exception('Fal.ai queue submission failed: '.$response->body());
+            }
+
+            $data = $response->json();
+            $requestId = $data['request_id'] ?? null;
+            if ($requestId && isset($data['status_url'])) {
+                Cache::put("fal_queue_request:{$requestId}", [
+                    'status_url' => $data['status_url'],
+                    'response_url' => $data['response_url'] ?? null,
+                ], now()->addDay());
+            }
+
+            return $data;
+        } catch (\Throwable $e) {
+            Log::error('FalAiService::queue: Submission threw exception', [
+                'message' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Check the status of a queued request.
+     */
+    public function checkQueueStatus(Team $team, string $model, string $requestId): array
+    {
+        $resolved = $this->resolveApiKeyAndCharge($team, 0);
+        $apiKey = $resolved['apiKey'];
+
+        if ($apiKey === 'bearny-codes' && app()->environment('local', 'testing')) {
+            return [
+                'status' => 'COMPLETED',
+            ];
+        }
+
+        $cached = Cache::get("fal_queue_request:{$requestId}");
+        $statusUrl = $cached['status_url'] ?? null;
+
+        if (! $statusUrl) {
+            $normalizedModel = $model;
+            if (str_ends_with($model, '/edit')) {
+                $normalizedModel = substr($model, 0, -5);
+            } elseif (str_ends_with($model, '/image-to-image')) {
+                $normalizedModel = substr($model, 0, -15);
+            }
+            $statusUrl = "https://queue.fal.run/{$normalizedModel}/requests/{$requestId}/status";
+        }
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Key '.$apiKey,
+            ])->timeout(10)->get($statusUrl);
+
+            if ($response->failed()) {
+                Log::error('FalAiService::checkQueueStatus: Request failed', [
+                    'url' => $statusUrl,
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                throw new \Exception('Fal.ai queue status check failed: '.$response->body());
+            }
+
+            return $response->json();
+        } catch (\Throwable $e) {
+            Log::error('FalAiService::checkQueueStatus: Threw exception', [
+                'message' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Fetch the response of a completed queue request.
+     */
+    public function getQueueResponse(Team $team, string $model, string $requestId): array
+    {
+        $resolved = $this->resolveApiKeyAndCharge($team, 1);
+        $apiKey = $resolved['apiKey'];
+        $shouldCharge = $resolved['shouldCharge'];
+
+        if ($apiKey === 'bearny-codes' && app()->environment('local', 'testing')) {
+            if ($shouldCharge) {
+                $team->chargeForImages(1);
+            }
+
+            return [
+                'images' => [
+                    ['url' => $this->generateDemoImage()],
+                ],
+            ];
+        }
+
+        $cached = Cache::get("fal_queue_request:{$requestId}");
+        $responseUrl = $cached['response_url'] ?? null;
+
+        if (! $responseUrl) {
+            $normalizedModel = $model;
+            if (str_ends_with($model, '/edit')) {
+                $normalizedModel = substr($model, 0, -5);
+            } elseif (str_ends_with($model, '/image-to-image')) {
+                $normalizedModel = substr($model, 0, -15);
+            }
+            $responseUrl = "https://queue.fal.run/{$normalizedModel}/requests/{$requestId}";
+        }
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Key '.$apiKey,
+            ])->timeout(20)->get($responseUrl);
+
+            if ($response->failed()) {
+                Log::error('FalAiService::getQueueResponse: Request failed', [
+                    'url' => $responseUrl,
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                throw new \Exception('Fal.ai queue response check failed: '.$response->body());
+            }
+
+            $data = $response->json();
+            if ($shouldCharge) {
+                $team->chargeForImages(1);
+            }
+
+            return $data;
+        } catch (\Throwable $e) {
+            Log::error('FalAiService::getQueueResponse: Threw exception', [
+                'message' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
     }
 }

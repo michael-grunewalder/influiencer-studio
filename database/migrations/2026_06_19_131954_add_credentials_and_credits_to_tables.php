@@ -13,11 +13,11 @@ return new class extends Migration
     {
         Schema::table('teams', function (Blueprint $table) {
             $table->string('fal_api_key')->nullable()->after('description');
-            $table->decimal('credits', 8, 2)->default(0.00)->after('fal_api_key');
+            $table->decimal('credits', 8, 2)->nullable()->default(0.00)->after('fal_api_key');
         });
 
         Schema::table('users', function (Blueprint $table) {
-            $table->decimal('credits', 8, 2)->default(0.00)->after('avatar');
+            $table->decimal('credits', 8, 2)->nullable()->default(0.00)->after('avatar');
         });
     }
 

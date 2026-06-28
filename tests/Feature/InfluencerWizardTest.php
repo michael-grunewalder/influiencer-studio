@@ -48,6 +48,15 @@ test('influencer wizard can progress and create an influencer with credit system
 
     // Mock Fal.ai image generation API and remote image downloads
     Http::fake([
+        'https://queue.fal.run/*/requests/*/status' => Http::response(['status' => 'COMPLETED'], 200),
+        'https://queue.fal.run/*/requests/*' => Http::response([
+            'images' => [
+                ['url' => 'https://v3.fal.media/files/mock-image.png'],
+            ],
+        ], 200),
+        'https://queue.fal.run/*' => Http::response([
+            'request_id' => 'mock_123',
+        ], 200),
         'https://fal.run/*' => Http::response([
             'images' => [
                 ['url' => 'https://v3.fal.media/files/mock-image.png'],
@@ -92,14 +101,16 @@ test('influencer wizard can progress and create an influencer with credit system
 
     // Call generate to call Fal.ai API
     $test->call('generate')
-        ->assertSet('is_generating', false)
-        ->assertSet('generated_variations', function ($vars) {
-            return is_array($vars) &&
-                   count($vars) === 3 &&
-                   ($vars[0]['url'] ?? '') === 'https://v3.fal.media/files/mock-image.png' &&
-                   ($vars[1]['url'] ?? '') === 'https://v3.fal.media/files/mock-image.png' &&
-                   ($vars[2]['url'] ?? '') === 'https://v3.fal.media/files/mock-image.png';
-        });
+        ->assertSet('is_generating', true)
+        ->call('checkWizardGenerationProgress')
+        ->assertSet('is_generating', false);
+    $test->assertSet('generated_variations', function ($vars) {
+        return is_array($vars) &&
+               count($vars) === 3 &&
+               ($vars[0]['url'] ?? '') === 'https://v3.fal.media/files/mock-image.png' &&
+               ($vars[1]['url'] ?? '') === 'https://v3.fal.media/files/mock-image.png' &&
+               ($vars[2]['url'] ?? '') === 'https://v3.fal.media/files/mock-image.png';
+    });
 
     // Check that credits were charged (3 images * $0.35 = $1.05 deducted from $10.00 = $8.95)
     $team->refresh();
@@ -109,6 +120,8 @@ test('influencer wizard can progress and create an influencer with credit system
     $test->set('selected_variation_index', 1)
         ->call('finishGeneration')
         ->assertSet('is_done', true);
+
+    expect($test->get('generated_avatar'))->toContain('/storage/teams/')->toContain('/avatar.png')->toContain('signature=');
 
     // Assert database has the influencer with local private avatar URL
     $influencer = Influencer::where('name', 'Elena Sterling')->first();
@@ -132,4 +145,30 @@ test('influencer wizard can progress and create an influencer with credit system
     expect($influencer->properties->age)->toBe(26);
     expect($influencer->properties->niche)->toBe(['Fashion', 'Beauty']);
     expect($influencer->properties->hair_color)->toBe('Brunette');
+});
+
+test('user can update API keys on influencer wizard and load Fal.ai balance', function () {
+    $user = User::factory()->create();
+    $team = Team::create(['name' => 'Test Team']);
+    $user->teams()->attach($team);
+    session(['active_team_id' => $team->id]);
+
+    Http::fake([
+        'https://fal.run/credits/balance' => Http::response(['balance' => 42.50], 200),
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(InfluencerWizard::class)
+        ->assertSet('showConnectModal', false)
+        ->call('openConnectModal')
+        ->assertSet('showConnectModal', true)
+        ->set('fal_api_key', 'fal_12345')
+        ->set('claude_api_key', 'sk-ant-12345')
+        ->call('saveApiKeys')
+        ->assertSet('showConnectModal', false)
+        ->assertHasNoErrors();
+
+    $team->refresh();
+    expect($team->fal_api_key)->toBe('fal_12345');
+    expect($team->claude_api_key)->toBe('sk-ant-12345');
 });
