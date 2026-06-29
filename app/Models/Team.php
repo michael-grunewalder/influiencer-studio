@@ -38,6 +38,11 @@ class Team extends Model
         return ! empty($this->fal_api_key);
     }
 
+    public function hasClaudeApiKey(): bool
+    {
+        return ! empty($this->claude_api_key);
+    }
+
     public function hasCreditsFor(int $imageCount): bool
     {
         $required = $imageCount * 0.35;

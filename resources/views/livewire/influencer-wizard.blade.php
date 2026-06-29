@@ -551,6 +551,19 @@
                                 @endforeach
                             </div>
                         </div>
+                        @if($this->getActiveTeam()?->claude_api_key || $claude_api_key)
+                            <div class="border-t border-base-300/40 pt-4 text-left mb-4">
+                                <div class="flex items-center gap-2 px-1 py-1 bg-violet-500/10 border border-violet-500/20 rounded-2xl max-w-sm">
+                                    <label class="flex items-center gap-2 cursor-pointer w-full py-1.5 px-3">
+                                        <input type="checkbox" wire:model="use_prompt_enhancer" class="checkbox checkbox-primary checkbox-xs rounded-md" />
+                                        <div class="text-left">
+                                            <span class="block text-[10px] font-extrabold text-violet-650 uppercase tracking-wide">Claude Prompt Enhancer</span>
+                                            <span class="block text-[8px] text-slate-500">Auto-refine influencer prompts for higher fidelity</span>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        @endif
                         <button type="button" wire:click="nextStep" class="btn btn-primary font-bold px-8 shadow-md shadow-primary/15">
                             Continue to Generate <span class="font-mono">→</span>
                         </button>

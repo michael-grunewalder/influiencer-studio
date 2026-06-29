@@ -506,12 +506,20 @@
                     <div class="bg-base-100 border border-base-300 rounded-3xl p-5 md:p-6 shadow-sm">
                         <div class="flex justify-between items-center mb-3">
                             <span class="block text-[10px] font-extrabold text-slate-500 tracking-wider uppercase">Prompt</span>
-                            <button type="button" x-on:click="navigator.clipboard.writeText($refs.promptText.value); Toaster.success('Prompt in die Zwischenablage kopiert!')" class="btn btn-xs btn-ghost flex items-center gap-1.5 text-slate-400">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
-                                </svg>
-                                Copy Prompt
-                            </button>
+                            <div class="flex items-center gap-3">
+                                @if($this->selectedInfluencer?->team?->claude_api_key)
+                                    <label class="flex items-center gap-1.5 cursor-pointer bg-violet-500/10 border border-violet-500/20 px-2.5 py-1 rounded-lg text-[9px] font-bold text-violet-650 uppercase">
+                                        <input type="checkbox" wire:model.live="use_prompt_enhancer" class="checkbox checkbox-primary checkbox-xs rounded-md" />
+                                        <span>Enhance with Claude</span>
+                                    </label>
+                                @endif
+                                <button type="button" x-on:click="navigator.clipboard.writeText($refs.promptText.value); Toaster.success('Prompt in die Zwischenablage kopiert!')" class="btn btn-xs btn-ghost flex items-center gap-1.5 text-slate-400">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+                                    </svg>
+                                    Copy Prompt
+                                </button>
+                            </div>
                         </div>
                         <textarea x-ref="promptText" readonly class="w-full bg-base-200 border border-base-300 rounded-2xl p-4 text-xs text-base-content font-mono focus:outline-none leading-relaxed resize-none h-28">{{ $this->generatedPrompt }}</textarea>
                     </div>

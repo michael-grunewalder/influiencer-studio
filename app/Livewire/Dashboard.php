@@ -6,6 +6,7 @@ use App\Data\InfluencerProperties;
 use App\Models\Influencer;
 use App\Models\Outfit;
 use App\Models\Team;
+use App\Services\ClaudeService;
 use App\Services\FalAiService;
 use App\Services\PromptBuilderService;
 use Illuminate\Support\Facades\File;
@@ -26,6 +27,8 @@ class Dashboard extends Component
     public ?string $selectedTeamId = null;
 
     public array $generationStates = [];
+
+    public bool $use_prompt_enhancer = false;
 
     public string $currentTab = 'profile'; // profile, photos, videos
 
@@ -324,6 +327,21 @@ class Dashboard extends Component
             }
 
             $selectedModel = $uploadedUrl ? $modelConfig['model_edit'] : $modelConfig['model'];
+
+            // Call Claude prompt enhancer if enabled
+            $enhancedPrompt = $prompt;
+            $negativePrompt = null;
+            if ($this->use_prompt_enhancer && $team->hasClaudeApiKey()) {
+                try {
+                    $claudeService = app(ClaudeService::class);
+                    $enhanced = $claudeService->enhancePrompt($prompt, $selectedModel, $team->claude_api_key);
+                    $enhancedPrompt = $enhanced['enhanced_prompt'] ?? $prompt;
+                    $negativePrompt = $enhanced['negative_prompt'] ?? null;
+                } catch (\Throwable $e) {
+                    Log::error('Dashboard prompt enhancement failed: '.$e->getMessage());
+                }
+            }
+
             $defaultSize = $modelConfig['default_size'] ?? 'portrait_4_3';
             $imageSize = $defaultSize;
 
@@ -358,10 +376,14 @@ class Dashboard extends Component
             }
 
             $payload = [
-                'prompt' => $prompt,
+                'prompt' => $enhancedPrompt,
                 'image_size' => $imageSize,
                 'enable_safety_checker' => false,
             ];
+
+            if ($negativePrompt) {
+                $payload['negative_prompt'] = $negativePrompt;
+            }
 
             if ($uploadedUrl) {
                 if (str_contains($selectedModel, 'gpt-image-2') || str_contains($selectedModel, 'gpt2')) {
@@ -384,6 +406,8 @@ class Dashboard extends Component
                 'request_id' => $requestId,
                 'model' => $selectedModel,
                 'queue_status' => 'IN_QUEUE',
+                'basic_prompt' => $prompt,
+                'enhanced_prompt' => $this->use_prompt_enhancer && $team->hasClaudeApiKey() ? $enhancedPrompt : null,
                 'error' => null,
             ];
         } catch (\Throwable $e) {
@@ -435,14 +459,20 @@ class Dashboard extends Component
                         throw new \Exception('No image URL returned from FAL.AI Queue response.');
                     }
 
+                    $metaData = [
+                        'module' => 'dashboard',
+                        'basic_prompt' => $state['basic_prompt'] ?? null,
+                        'enhanced_prompt' => $state['enhanced_prompt'] ?? null,
+                    ];
+
                     $ext = pathinfo(parse_url($remoteUrl, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'png';
                     if ($field === 'avatar') {
                         $destPath = "teams/{$team->id}/influencers/{$influencer->id}/avatar.{$ext}";
-                        $localUrl = $service->downloadAndRegister($team, $remoteUrl, 'avatar', $destPath);
+                        $localUrl = $service->downloadAndRegister($team, $remoteUrl, 'avatar', $destPath, $metaData);
                         $influencer->update(['avatar' => $localUrl]);
                     } else {
                         $destPath = "teams/{$team->id}/influencers/{$influencer->id}/references/{$field}_".time().".{$ext}";
-                        $localUrl = $service->downloadAndRegister($team, $remoteUrl, $field, $destPath);
+                        $localUrl = $service->downloadAndRegister($team, $remoteUrl, $field, $destPath, $metaData);
                         $props = $influencer->properties ?? new InfluencerProperties;
                         $props->{$field} = $localUrl;
                         $influencer->update(['properties' => $props]);

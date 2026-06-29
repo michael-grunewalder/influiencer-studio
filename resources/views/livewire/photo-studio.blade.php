@@ -167,6 +167,17 @@
 
                 {{-- Action & Charges --}}
                 <div class="space-y-2 pt-2">
+                    @if($this->influencer->team?->claude_api_key)
+                        <div class="flex items-center gap-2 px-1 py-1 bg-violet-500/10 border border-violet-500/20 rounded-2xl mb-2">
+                            <label class="flex items-center gap-2 cursor-pointer w-full py-1 px-2.5">
+                                <input type="checkbox" wire:model="use_prompt_enhancer" class="checkbox checkbox-primary checkbox-xs rounded-md" />
+                                <div class="text-left">
+                                    <span class="block text-[10px] font-extrabold text-violet-650 uppercase tracking-wide">Claude Prompt Enhancer</span>
+                                    <span class="block text-[8px] text-slate-500">Refine using official FAL.ai model prompting guides</span>
+                                </div>
+                            </label>
+                        </div>
+                    @endif
                     <button type="button" wire:click="generate" @disabled($generating) class="btn btn-primary w-full rounded-2xl font-bold py-3 shadow-lg shadow-primary/20 text-white flex items-center justify-center gap-2">
                         @if($generating)
                             <span class="loading loading-spinner loading-xs"></span>

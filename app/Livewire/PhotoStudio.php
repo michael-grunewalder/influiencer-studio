@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\Influencer;
 use App\Models\Team;
 use App\Models\TeamAsset;
+use App\Services\ClaudeService;
 use App\Services\FalAiService;
 use App\Services\PromptBuilderService;
 use Illuminate\Support\Facades\File;
@@ -48,6 +49,8 @@ class PhotoStudio extends Component
     public string $expression = 'natural';
 
     public string $gaze = 'at-camera';
+
+    public bool $use_prompt_enhancer = false;
 
     // Text overrides
     public string $propText = '';
@@ -435,10 +438,35 @@ class PhotoStudio extends Component
                 throw new \Exception("Insufficient team credits. Required: \${$cost}. Current balance: \${$team->credits}.");
             }
 
+            // Call Claude prompt enhancer if enabled
+            $enhancedPrompts = [];
+            $negativePrompts = [];
+            if ($this->use_prompt_enhancer && $team->hasClaudeApiKey()) {
+                $claudeService = app(ClaudeService::class);
+                foreach ($prompts as $p) {
+                    try {
+                        $enhanced = $claudeService->enhancePrompt($p, $this->selectedModel, $team->claude_api_key);
+                        $enhancedPrompts[] = $enhanced['enhanced_prompt'] ?? $p;
+                        $negativePrompts[] = $enhanced['negative_prompt'] ?? null;
+                    } catch (\Throwable $e) {
+                        Log::error('PhotoStudio prompt enhancement failed: '.$e->getMessage());
+                        $enhancedPrompts[] = $p;
+                        $negativePrompts[] = null;
+                    }
+                }
+            } else {
+                $enhancedPrompts = $prompts;
+                $negativePrompts = array_fill(0, count($prompts), null);
+            }
+
             // 4. Construct model payloads
             $payloads = [];
-            foreach ($prompts as $p) {
-                $payloads[] = $this->buildModelPayload($this->selectedModel, $p, $imageUrls, $this->aspectRatio);
+            foreach ($enhancedPrompts as $index => $ep) {
+                $payload = $this->buildModelPayload($this->selectedModel, $ep, $imageUrls, $this->aspectRatio);
+                if ($negativePrompts[$index]) {
+                    $payload['negative_prompt'] = $negativePrompts[$index];
+                }
+                $payloads[] = $payload;
             }
 
             // Prepare settings payload for metadata
@@ -506,7 +534,7 @@ class PhotoStudio extends Component
                     'status' => 'processing',
                     'queue_status' => 'IN_QUEUE',
                     'basic_prompt' => $prompts[$index] ?? $prompts[0],
-                    'enhanced_prompt' => null,
+                    'enhanced_prompt' => $this->use_prompt_enhancer && $team->hasClaudeApiKey() ? $enhancedPrompts[$index] : null,
                     'settings' => $settings,
                 ];
             }

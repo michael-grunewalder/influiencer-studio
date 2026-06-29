@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Data\InfluencerProperties;
 use App\Models\Influencer;
 use App\Models\Team;
+use App\Services\ClaudeService;
 use App\Services\FalAiService;
 use App\Services\PromptBuilderService;
 use Illuminate\Support\Facades\File;
@@ -26,6 +27,8 @@ class InfluencerWizard extends Component
     public string $fal_api_key = '';
 
     public string $claude_api_key = '';
+
+    public bool $use_prompt_enhancer = false;
 
     public bool $showConnectModal = false;
 
@@ -344,16 +347,42 @@ class InfluencerWizard extends Component
                 'prompts' => $prompts,
             ]);
 
+            // Call Claude prompt enhancer if enabled
+            $enhancedPrompts = [];
+            $negativePrompts = [];
+            $claudeApiKey = $this->claude_api_key ?: $team->claude_api_key;
+            if ($this->use_prompt_enhancer && ! empty($claudeApiKey)) {
+                $claudeService = app(ClaudeService::class);
+                foreach ($prompts as $p) {
+                    try {
+                        $enhanced = $claudeService->enhancePrompt($p, $selectedModel, $claudeApiKey);
+                        $enhancedPrompts[] = $enhanced['enhanced_prompt'] ?? $p;
+                        $negativePrompts[] = $enhanced['negative_prompt'] ?? null;
+                    } catch (\Throwable $e) {
+                        Log::error('Wizard variation prompt enhancement failed: '.$e->getMessage());
+                        $enhancedPrompts[] = $p;
+                        $negativePrompts[] = null;
+                    }
+                }
+            } else {
+                $enhancedPrompts = $prompts;
+                $negativePrompts = array_fill(0, count($prompts), null);
+            }
+
             // 4. Compose payloads with default size 768x1024
             $payloads = [];
             $imageSize = $modelConfig['default_size'] ?? 'portrait_4_3';
 
-            foreach ($prompts as $index => $prompt) {
-                PromptBuilderService::logPrompt($prompt, null, 'Wizard Variation '.($index + 1));
+            foreach ($enhancedPrompts as $index => $ep) {
+                PromptBuilderService::logPrompt($ep, null, 'Wizard Variation '.($index + 1));
                 $payload = [
-                    'prompt' => $prompt,
+                    'prompt' => $ep,
                     'image_size' => $imageSize,
                 ];
+
+                if ($negativePrompts[$index]) {
+                    $payload['negative_prompt'] = $negativePrompts[$index];
+                }
 
                 if ($uploadedUrl) {
                     if (str_contains($selectedModel, 'gpt-image-2') || str_contains($selectedModel, 'gpt2')) {
@@ -366,7 +395,9 @@ class InfluencerWizard extends Component
                 $payloads[] = $payload;
 
                 // Store details in components state
-                $this->generated_variations[$index]['prompt'] = $prompt;
+                $this->generated_variations[$index]['basic_prompt'] = $prompts[$index];
+                $this->generated_variations[$index]['enhanced_prompt'] = $this->use_prompt_enhancer && ! empty($claudeApiKey) ? $ep : null;
+                $this->generated_variations[$index]['prompt'] = $ep;
                 $this->generated_variations[$index]['payload'] = $payload;
             }
 
@@ -568,9 +599,18 @@ class InfluencerWizard extends Component
         $variation = $this->generated_variations[$this->selected_variation_index] ?? null;
         $selectedAvatar = ($variation && isset($variation['url'])) ? $variation['url'] : 'https://picsum.photos/720/1280';
 
+        $metaData = null;
+        if ($variation) {
+            $metaData = [
+                'module' => 'influencer-wizard',
+                'basic_prompt' => $variation['basic_prompt'] ?? $variation['prompt'] ?? null,
+                'enhanced_prompt' => $variation['enhanced_prompt'] ?? null,
+            ];
+        }
+
         $ext = pathinfo(parse_url($selectedAvatar, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'png';
         $destPath = "teams/{$teamId}/influencers/{$influencerId}/avatar.{$ext}";
-        $localAvatarUrl = app(FalAiService::class)->downloadAndRegister($team, $selectedAvatar, 'avatar', $destPath);
+        $localAvatarUrl = app(FalAiService::class)->downloadAndRegister($team, $selectedAvatar, 'avatar', $destPath, $metaData);
 
         if (str_starts_with($localAvatarUrl, '/storage/teams/')) {
             $path = substr($localAvatarUrl, strlen('/storage/'));
