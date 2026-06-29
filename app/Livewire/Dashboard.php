@@ -6,12 +6,16 @@ use App\Data\InfluencerProperties;
 use App\Models\Influencer;
 use App\Models\Outfit;
 use App\Models\Team;
+use App\Models\TeamAsset;
 use App\Services\ClaudeService;
 use App\Services\FalAiService;
+use App\Services\InfluencerImportExportService;
 use App\Services\PromptBuilderService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -61,6 +65,14 @@ class Dashboard extends Component
     public $uploaded_closeup;
 
     public $uploaded_detail_sheet;
+
+    public $importFile;
+
+    public string $importUrl = '';
+
+    public bool $showImportModal = false;
+
+    public bool $showDeleteConfirmModal = false;
 
     // Outfit properties
     public string $outfit_top = '';
@@ -191,18 +203,94 @@ class Dashboard extends Component
             ->first();
 
         if ($influencer) {
-            $influencer->delete();
+            $this->performDeletion($influencer);
             Toaster::success(__('Influencer gelöscht.'));
         }
 
         if ($this->selectedId === $id) {
-            $next = Influencer::where('team_id', $this->selectedTeamId)->latest()->first();
-            if ($next) {
-                $this->selectInfluencer($next->id);
-            } else {
-                $this->selectedId = null;
-                $this->resetEditFields();
-            }
+            $this->selectNextInfluencer();
+        }
+    }
+
+    public function deleteOnly(): void
+    {
+        $influencer = $this->selectedInfluencer;
+        if ($influencer) {
+            $this->performDeletion($influencer);
+            Toaster::success(__('Influencer gelöscht.'));
+        }
+
+        $this->showDeleteConfirmModal = false;
+        $this->selectNextInfluencer();
+    }
+
+    public function exportAndDelete()
+    {
+        $influencer = $this->selectedInfluencer;
+        if (! $influencer) {
+            Toaster::error(__('Kein Influencer ausgewählt.'));
+
+            return null;
+        }
+
+        try {
+            $service = app(InfluencerImportExportService::class);
+            $zipPath = $service->export($influencer);
+            $filename = Str::slug($influencer->name).'.isdata';
+
+            $this->performDeletion($influencer);
+            $this->showDeleteConfirmModal = false;
+            $this->selectNextInfluencer();
+
+            return response()->download($zipPath, $filename)->deleteFileAfterSend(true);
+        } catch (\Throwable $e) {
+            Log::error('Failed to export and delete influencer: '.$e->getMessage(), [
+                'influencer_id' => $influencer->id,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            Toaster::error(__('Export & Deletion fehlgeschlagen: :error', ['error' => $e->getMessage()]));
+
+            return null;
+        }
+    }
+
+    protected function performDeletion(Influencer $influencer): void
+    {
+        $teamId = $influencer->team_id;
+        $influencerId = $influencer->id;
+
+        DB::transaction(function () use ($influencer, $influencerId, $teamId) {
+            // Delete Outfits
+            Outfit::where('influencer_id', $influencerId)->delete();
+
+            // Delete Team Assets
+            TeamAsset::where('team_id', $teamId)
+                ->where(function ($query) use ($influencerId) {
+                    $query->where('local_url', 'like', "%/influencers/{$influencerId}/%")
+                        ->orWhere('purpose', 'like', "%{$influencerId}%");
+                })
+                ->delete();
+
+            // Delete Influencer record
+            $influencer->delete();
+        });
+
+        // Delete physical files
+        try {
+            Storage::disk('local')->deleteDirectory("teams/{$teamId}/influencers/{$influencerId}");
+        } catch (\Throwable $e) {
+            Log::error('Failed to delete physical files for influencer '.$influencerId.': '.$e->getMessage());
+        }
+    }
+
+    protected function selectNextInfluencer(): void
+    {
+        $next = Influencer::where('team_id', $this->selectedTeamId)->latest()->first();
+        if ($next) {
+            $this->selectInfluencer($next->id);
+        } else {
+            $this->selectedId = null;
+            $this->resetEditFields();
         }
     }
 
@@ -816,6 +904,79 @@ class Dashboard extends Component
         if ($this->activeOutfitId === $id) {
             $this->activeOutfitId = null;
             $this->showOutfitOverlay = false;
+        }
+    }
+
+    public function exportInfluencer()
+    {
+        $influencer = $this->selectedInfluencer;
+        if (! $influencer) {
+            Toaster::error(__('Kein Influencer ausgewählt.'));
+
+            return null;
+        }
+
+        try {
+            $service = app(InfluencerImportExportService::class);
+            $zipPath = $service->export($influencer);
+
+            $filename = Str::slug($influencer->name).'.isdata';
+
+            return response()->download($zipPath, $filename)->deleteFileAfterSend(true);
+        } catch (\Throwable $e) {
+            Log::error('Failed to export influencer: '.$e->getMessage(), [
+                'influencer_id' => $influencer->id,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            Toaster::error(__('Export fehlgeschlagen: :error', ['error' => $e->getMessage()]));
+
+            return null;
+        }
+    }
+
+    public function importInfluencer(): void
+    {
+        if (! $this->selectedTeamId) {
+            Toaster::error(__('Kein Team ausgewählt.'));
+
+            return;
+        }
+
+        $this->validate([
+            'importFile' => 'nullable|file|max:51200', // max 50MB
+            'importUrl' => 'nullable|url|max:2048',
+        ]);
+
+        if (! $this->importFile && empty(trim($this->importUrl))) {
+            Toaster::error(__('Bitte lade eine .isdata-Datei hoch oder gib einen Download-Link an.'));
+
+            return;
+        }
+
+        try {
+            $service = app(InfluencerImportExportService::class);
+
+            if ($this->importFile) {
+                $filePath = $this->importFile->getRealPath();
+                $influencer = $service->import($filePath, $this->selectedTeamId);
+            } else {
+                $influencer = $service->importFromUrl($this->importUrl, $this->selectedTeamId);
+            }
+
+            $this->showImportModal = false;
+            $this->importFile = null;
+            $this->importUrl = '';
+
+            Toaster::success(__('Influencer erfolgreich importiert!'));
+
+            // Select the newly imported influencer
+            $this->selectInfluencer($influencer->id);
+            $this->dispatch('credits-updated');
+        } catch (\Throwable $e) {
+            Log::error('Failed to import influencer: '.$e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            Toaster::error(__('Import fehlgeschlagen: :error', ['error' => $e->getMessage()]));
         }
     }
 

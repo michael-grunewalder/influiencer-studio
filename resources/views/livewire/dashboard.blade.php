@@ -40,6 +40,7 @@
         <div class="p-4 border-b border-base-300 flex justify-between items-center bg-base-100/50">
             <span class="font-extrabold text-xs uppercase tracking-widest text-slate-500">Influencers</span>
             <div class="flex items-center gap-1">
+                <x-button icon="o-arrow-down-tray" class="btn-sm btn-ghost btn-circle" tooltip="Import Influencer" wire:click="$set('showImportModal', true)" />
                 <x-button icon="o-plus" class="btn-sm btn-ghost btn-circle" tooltip="Add Influencer" link="/influencer/create" />
                 <x-button icon="o-chevron-left" class="btn-sm btn-ghost btn-circle hidden lg:inline-flex" />
             </div>
@@ -143,9 +144,10 @@
                             </div>
                         </div>
                         
-                        <button type="button" wire:click="deleteInfluencer('{{ $this->selectedInfluencer->id }}')" wire:confirm="Möchtest du diesen Influencer wirklich löschen?" class="btn btn-sm btn-error text-white font-bold px-4 py-2 rounded-xl">
-                            Delete
-                        </button>
+                        <div class="flex gap-2">
+                            <x-button label="Export" icon="o-arrow-up-tray" wire:click="exportInfluencer" class="btn-sm btn-outline rounded-xl" />
+                            <x-button label="Delete" icon="o-trash" wire:click="$set('showDeleteConfirmModal', true)" class="btn-sm btn-error text-white rounded-xl" />
+                        </div>
                     </div>
 
                     {{-- Image Sheets Grid --}}
@@ -773,6 +775,58 @@
                 </div>
             </div>
         @endif
+    @endif
+
+    {{-- Import Influencer Modal --}}
+    @if($showImportModal)
+        <div class="modal modal-open backdrop-blur-sm bg-black/40 fixed inset-0 z-50 flex items-center justify-center">
+            <div class="modal-box bg-base-100 border border-base-300 p-6 rounded-2xl max-w-md w-full">
+                <h3 class="font-bold text-lg mb-4 text-base-content">Influencer importieren</h3>
+                
+                <div class="space-y-4">
+                    <div class="form-control">
+                        <label class="label font-bold text-xs text-slate-500 uppercase tracking-wider">Lade .isdata-Datei hoch</label>
+                        <input type="file" wire:model="importFile" class="file-input file-input-bordered w-full text-sm" accept=".isdata" />
+                        @error('importFile') <span class="text-error text-xs mt-1">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div class="divider text-xs text-slate-400 font-bold uppercase">ODER</div>
+
+                    <div class="form-control">
+                        <x-input label="Download-Link (URL)" wire:model="importUrl" placeholder="https://example.com/influencer.isdata" />
+                        @error('importUrl') <span class="text-error text-xs mt-1">{{ $message }}</span> @enderror
+                    </div>
+                </div>
+
+                <div class="modal-action flex justify-end gap-2 mt-6">
+                    <x-button label="Abbrechen" wire:click="$set('showImportModal', false)" class="btn-ghost" />
+                    <x-button label="Importieren" wire:click="importInfluencer" class="btn-primary" />
+                </div>
+            </div>
+        </div>
+    @endif
+
+    {{-- Delete Confirmation Modal (SweetAlert style) --}}
+    @if($showDeleteConfirmModal && $this->selectedInfluencer)
+        <div class="modal modal-open backdrop-blur-sm bg-black/40 fixed inset-0 z-50 flex items-center justify-center">
+            <div class="modal-box bg-base-100 border border-base-300 p-6 rounded-3xl max-w-md w-full text-center relative overflow-hidden">
+                {{-- Alert icon --}}
+                <div class="w-16 h-16 rounded-full bg-error/10 border border-error/20 flex items-center justify-center mx-auto text-error mb-4 shadow-sm">
+                    <x-icon name="o-exclamation-triangle" class="w-8 h-8" />
+                </div>
+
+                <h3 class="font-extrabold text-xl mb-2 text-base-content">Löschen bestätigen</h3>
+                <p class="text-slate-500 text-sm leading-relaxed mb-6">
+                    Achtung: Alle Daten für <strong class="text-base-content font-bold">{{ $this->selectedInfluencer->name }}</strong> (inkl. aller generierten Fotos, Outfits und Einstellungen) gehen unwiderruflich verloren. Möchtest du den Influencer vor dem Löschen als Backup exportieren?
+                </p>
+
+                <div class="flex flex-col gap-2">
+                    <x-button label="Export & Delete" icon="o-arrow-down-tray" wire:click="exportAndDelete" class="btn-primary w-full py-2.5 rounded-xl text-xs font-bold" />
+                    <x-button label="Delete without backup" icon="o-trash" wire:click="deleteOnly" class="btn-error text-white w-full py-2.5 rounded-xl text-xs font-bold" />
+                    <x-button label="Cancel" wire:click="$set('showDeleteConfirmModal', false)" class="btn-ghost w-full py-2.5 rounded-xl text-xs font-bold" />
+                </div>
+            </div>
+        </div>
     @endif
 
 </div>
